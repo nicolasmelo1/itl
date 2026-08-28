@@ -5,8 +5,9 @@ service managed by uv.
 
 ## Architecture
 
-Next.js and React render the product UI. FastAPI and DSPy interpret generation
-requests. The processes communicate only through documented HTTP JSON routes;
+Next.js and React render the product UI. FastAPI owns the generation boundary;
+DSPy will interpret generation requests once that capability is implemented.
+The processes communicate only through documented HTTP JSON routes;
 the canonical UI representation is a JSON UI specification, never a screenshot.
 SQLite will keep local preference evidence in the gitignored `data/` directory.
 The web app never opens that database or imports Python-owned types.
