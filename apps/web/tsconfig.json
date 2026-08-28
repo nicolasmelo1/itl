@@ -19,7 +19,9 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@itl/design-system": ["../../packages/design-system/src/index.tsx"],
+      "@itl/ui-catalog": ["../../packages/ui-catalog/src/index.tsx"]
     }
   },
   "include": [
