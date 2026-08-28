@@ -1,7 +1,5 @@
+import { ControlledCanvas } from "@/features/canvas/controlled-canvas";
+
 export default function Home() {
-  return (
-    <main>
-      <div>Hello world!</div>
-    </main>
-  );
+  return <ControlledCanvas />;
 }

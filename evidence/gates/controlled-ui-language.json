@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "gate": "controlled-ui-language",
+  "implementation_sha256": "777fc73c9528e11cc0ee9f14cf08d1b461a70a086d8ca0a22580f5cba922ed17",
+  "runs": [
+    {
+      "scenario": "controlled-ui-language",
+      "status": "passed",
+      "actor": "Codex",
+      "report": "evidence/reports/controlled-ui-language.json",
+      "report_sha256": "03ce53786a7ecc370d1f12d948d82c636149396a7608fdc739b92b55df39d2a9",
+      "required_assertions": [
+        "ui.valid_spec_renders_deterministically",
+        "ui.invalid_specs_fail_closed",
+        "ui.button_accessibility_states_pass",
+        "ui.generated_props_are_constrained",
+        "ui.storybook_matches_catalog"
+      ]
+    }
+  ]
+}

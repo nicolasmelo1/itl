@@ -1,0 +1,15 @@
+:global(:root) {
+  --color-accent: #4f46e5;
+  --color-accent-strong: #3730a3;
+  --color-accent-muted: #e0e7ff;
+  --color-accent-ink: #312e81;
+  --color-border: #c9cbd2;
+  --color-success-muted: #dcfce7;
+  --color-success-ink: #166534;
+  --color-surface: #ffffff;
+  --color-surface-raised: #f4f4f6;
+  --color-text: #1d2027;
+  --color-text-inverse: #ffffff;
+  --color-text-muted: #5f6470;
+  --focus-ring: #f59e0b;
+}

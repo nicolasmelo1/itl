@@ -1,0 +1,22 @@
+.canvas {
+  background: #f4f4f6;
+  display: grid;
+  gap: 1rem;
+  min-height: 100vh;
+  padding: clamp(1.5rem, 4vw, 4rem);
+  place-items: center;
+}
+
+.workbench {
+  display: grid;
+  gap: 0.75rem;
+  max-width: 38rem;
+  width: min(100%, 38rem);
+}
+
+.selection {
+  color: #5f6470;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8125rem;
+  margin: 0;
+}
