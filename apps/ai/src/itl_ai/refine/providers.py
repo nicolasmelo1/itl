@@ -1,37 +1,40 @@
-# pyright: reportMissingTypeStubs=false, reportUnknownArgumentType=false, reportUnknownMemberType=false
+# DSPy does not publish pyright stubs; the optional live-provider boundary is isolated here.
+# pyright: reportUnknownArgumentType=false, reportUnknownMemberType=false, reportUnknownVariableType=false
 """Provider adapter: deterministic fixtures locally, DSPy signatures for models."""
 
 import json
 import unicodedata
 from typing import Protocol
 
-import dspy
-
 from itl_ai.refine.models import ParseCritiqueRequest
 
 
-class GenerateSpec(dspy.Signature):
-    """Produce one schema-valid, catalog-constrained Button UI spec as JSON."""
+def _dspy_operations() -> tuple[object, type[object], type[object], type[object]]:
+    """Declare the three typed DSPy operations only when a live provider is enabled."""
+    import dspy  # type: ignore[import-untyped]  # DSPy does not publish pyright stubs.
 
-    prompt: str = dspy.InputField()
-    spec_json: str = dspy.OutputField(desc="A complete JSON UI spec and nothing else.")
+    class GenerateSpec(dspy.Signature):  # type: ignore[misc]
+        """Produce one schema-valid, catalog-constrained Button UI spec as JSON."""
 
+        prompt: str = dspy.InputField()
+        spec_json: str = dspy.OutputField(desc="A complete JSON UI spec and nothing else.")
 
-class ParseCritique(dspy.Signature):
-    """Interpret critique into reviewable Button patch intent JSON, never CSS."""
+    class ParseCritique(dspy.Signature):  # type: ignore[misc]
+        """Interpret critique into reviewable Button patch intent JSON, never CSS."""
 
-    spec_json: str = dspy.InputField()
-    target_element_id: str = dspy.InputField()
-    critique: str = dspy.InputField()
-    patch_intent_json: str = dspy.OutputField(desc="A JSON PatchIntent object and nothing else.")
+        spec_json: str = dspy.InputField()
+        target_element_id: str = dspy.InputField()
+        critique: str = dspy.InputField()
+        patch_intent_json: str = dspy.OutputField(desc="A JSON PatchIntent object and nothing else.")
 
+    class GenerateVariants(dspy.Signature):  # type: ignore[misc]
+        """Suggest constrained Button variants as JSON; deterministic validation is mandatory."""
 
-class GenerateVariants(dspy.Signature):
-    """Suggest constrained Button variants as JSON; deterministic validation is mandatory."""
+        spec_json: str = dspy.InputField()
+        patch_intent_json: str = dspy.InputField()
+        variants_json: str = dspy.OutputField(desc="A JSON object containing variants and nothing else.")
 
-    spec_json: str = dspy.InputField()
-    patch_intent_json: str = dspy.InputField()
-    variants_json: str = dspy.OutputField(desc="A JSON object containing variants and nothing else.")
+    return dspy, GenerateSpec, ParseCritique, GenerateVariants
 
 
 class RefineProvider(Protocol):
@@ -147,8 +150,9 @@ class DSPyRefineProvider:
     """Thin adapter for a configured DSPy runtime. Output remains untrusted JSON."""
 
     def __init__(self) -> None:
-        self._generate_spec = dspy.Predict(GenerateSpec)
-        self._parse_critique = dspy.Predict(ParseCritique)
+        dspy, generate_spec, parse_critique, _ = _dspy_operations()
+        self._generate_spec = dspy.Predict(generate_spec)  # type: ignore[union-attr]
+        self._parse_critique = dspy.Predict(parse_critique)  # type: ignore[union-attr]
 
     def generate_spec(self, prompt: str) -> str:
         return str(self._generate_spec(prompt=prompt).spec_json)

@@ -7,9 +7,13 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "dspy>=3.1.3",
     "fastapi>=0.141.1",
     "uvicorn[standard]>=0.52.4",
+]
+
+[project.optional-dependencies]
+dspy = [
+    "dspy>=3.1.3",
 ]
 
 [project.scripts]
