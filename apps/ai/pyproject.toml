@@ -11,6 +11,11 @@ dependencies = [
     "uvicorn[standard]>=0.52.4",
 ]
 
+[project.optional-dependencies]
+dspy = [
+    "dspy>=3.1.3",
+]
+
 [project.scripts]
 itl-ai = "itl_ai.main:run"
 
@@ -38,6 +43,7 @@ norecursedirs = [".venv", "../../.software-factory/mutations"]
 
 [tool.ruff]
 extend-exclude = ["../../.software-factory/mutations"]
+line-length = 120
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]

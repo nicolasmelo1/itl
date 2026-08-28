@@ -1,0 +1,11 @@
+{
+  "code": "invalid_model_output",
+  "message": "The refinement response could not be safely interpreted. The current spec was retained.",
+  "issues": [
+    {
+      "code": "malformed_json",
+      "message": "Expected a JSON object from the provider."
+    }
+  ],
+  "recoverable": true
+}

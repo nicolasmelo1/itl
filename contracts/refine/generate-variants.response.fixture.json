@@ -1,0 +1,14 @@
+{
+  "variants": [
+    {
+      "id": "exploit-1",
+      "kind": "exploit",
+      "spec": { "version": "itl.ui/v1", "root": "continue-button", "elements": {} }
+    },
+    {
+      "id": "adjacent-explore-1",
+      "kind": "adjacent_explore",
+      "spec": { "version": "itl.ui/v1", "root": "continue-button", "elements": {} }
+    }
+  ]
+}

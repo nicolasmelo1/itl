@@ -2,12 +2,33 @@
 
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from itl_ai.config.settings import load_settings
+from itl_ai.refine.catalog import RefineValidationError
+from itl_ai.refine.models import (
+    ErrorResponse as RefineErrorResponse,
+)
+from itl_ai.refine.models import (
+    GenerateSpecRequest,
+    GenerateSpecResponse,
+    GenerateVariantsRequest,
+    GenerateVariantsResponse,
+    ParseCritiqueRequest,
+    ParseCritiqueResponse,
+)
+from itl_ai.refine.service import RefineService
 
 app = FastAPI(title="ITL AI API", version="0.1.0")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_methods=["POST"],
+    allow_headers=["Content-Type"],
+)
+refine_service = RefineService()
 
 
 class HealthResponse(BaseModel):
@@ -35,6 +56,20 @@ async def validation_error(_: Request, __: RequestValidationError) -> JSONRespon
     )
 
 
+@app.exception_handler(RefineValidationError)
+async def refine_validation_error(_: Request, error: RefineValidationError) -> JSONResponse:
+    """Return recoverable model/patch errors without changing a caller's spec."""
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        content=RefineErrorResponse(
+            code=error.code,
+            message=error.message,
+            issues=error.issues,
+            recoverable=True,
+        ).model_dump(),
+    )
+
+
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
     """Report process health without requiring a model-provider credential."""
@@ -53,9 +88,7 @@ def generate(_: GenerationRequest) -> JSONResponse:
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content=ErrorResponse(
                 code="provider_not_configured",
-                message=(
-                    "Generation is unavailable until a provider API key is configured."
-                ),
+                message=("Generation is unavailable until a provider API key is configured."),
             ).model_dump(),
         )
 
@@ -66,6 +99,36 @@ def generate(_: GenerationRequest) -> JSONResponse:
             message="Generation has not been implemented yet.",
         ).model_dump(),
     )
+
+
+@app.post(
+    "/v1/refine/generate-spec",
+    response_model=GenerateSpecResponse,
+    responses={status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": RefineErrorResponse}},
+)
+def generate_spec(request: GenerateSpecRequest) -> GenerateSpecResponse:
+    """Generate the only initial component family: a catalog-constrained Button."""
+    return refine_service.generate_spec(request)
+
+
+@app.post(
+    "/v1/refine/parse-critique",
+    response_model=ParseCritiqueResponse,
+    responses={status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": RefineErrorResponse}},
+)
+def parse_critique(request: ParseCritiqueRequest) -> ParseCritiqueResponse:
+    """Return a reviewable intent; parsing never mutates a UI spec."""
+    return refine_service.parse_critique(request)
+
+
+@app.post(
+    "/v1/refine/generate-variants",
+    response_model=GenerateVariantsResponse,
+    responses={status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": RefineErrorResponse}},
+)
+def generate_variants(request: GenerateVariantsRequest) -> GenerateVariantsResponse:
+    """Create only validated variants with locks checked deterministically."""
+    return refine_service.generate_variants(request)
 
 
 def run() -> None:

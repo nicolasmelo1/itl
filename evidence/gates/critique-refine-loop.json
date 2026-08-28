@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "gate": "critique-refine-loop",
+  "implementation_sha256": "0028e51f38e4a7ca6732394991eeec5f781844cf76006e3231f75e4919e02096",
+  "runs": [
+    {
+      "scenario": "critique-refine-loop",
+      "status": "passed",
+      "actor": "Codex",
+      "report": "evidence/reports/critique-refine-loop.json",
+      "report_sha256": "8dd9c9ea8fcf6064407edc56e15cab4d9e31f474400d801af019df2ffb4e511e",
+      "required_assertions": [
+        "refine.critique_yields_reviewable_patch_intent",
+        "refine.locks_are_preserved",
+        "refine.explored_values_are_valid",
+        "refine.rejection_is_not_a_preference",
+        "refine.invalid_model_output_preserves_current_spec"
+      ]
+    }
+  ]
+}

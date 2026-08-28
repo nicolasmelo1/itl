@@ -1,0 +1,22 @@
+{
+  "version": "itl.ui/v1",
+  "root": "continue-button",
+  "elements": {
+    "continue-button": {
+      "type": "Button",
+      "props": {
+        "label": "Continue",
+        "variant": "solid",
+        "size": "regular",
+        "radius": "soft",
+        "density": "comfortable",
+        "background": "accent",
+        "foreground": "light",
+        "border": "none",
+        "fontWeight": "semibold",
+        "state": "default"
+      },
+      "children": []
+    }
+  }
+}
