@@ -91,3 +91,23 @@ test("ui.storybook_matches_catalog", () => {
   fireEvent.click(screen.getByRole("button", { name: "Continue" }));
   expect(screen.getByTestId("selected-element").textContent).toContain("continue-button");
 });
+
+test("refine.rejection_is_not_a_preference", () => {
+  render(<ControlledCanvas />);
+
+  fireEvent.change(screen.getByLabelText("Optional critique"), {
+    target: { value: "I like the color and spacing, but it is too rounded." },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Review interpretation" }));
+  expect(screen.getByRole("region", { name: "Review refinement intent" })).toBeDefined();
+  expect(screen.getByText("Keep")).toBeDefined();
+  expect(screen.getByText("Explore")).toBeDefined();
+
+  fireEvent.click(screen.getByRole("button", { name: "Generate constrained alternatives" }));
+  expect(screen.getByRole("region", { name: "Constrained alternatives" })).toBeDefined();
+  expect(screen.getByText("exploit")).toBeDefined();
+  expect(screen.getByText("adjacent explore")).toBeDefined();
+
+  fireEvent.click(screen.getByRole("button", { name: "Reject all" }));
+  expect(screen.getByTestId("refine-status").textContent).toContain("No option was selected as a winner");
+});

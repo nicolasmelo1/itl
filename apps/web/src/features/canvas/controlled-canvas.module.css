@@ -9,9 +9,13 @@
 
 .workbench {
   display: grid;
-  gap: 0.75rem;
+  gap: 1rem;
+  max-width: 72rem;
+  width: min(100%, 72rem);
+}
+
+.currentSpec {
   max-width: 38rem;
-  width: min(100%, 38rem);
 }
 
 .selection {
@@ -19,4 +23,149 @@
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.8125rem;
   margin: 0;
+}
+
+.status,
+.panel p,
+.intentReview p,
+.inspector p {
+  color: #5f6470;
+  margin: 0;
+}
+
+.panel,
+.intentReview,
+.variants,
+.notice {
+  background: #fff;
+  border: 1px solid #d8dbe2;
+  border-radius: 0.75rem;
+  padding: 1rem;
+}
+
+.panel,
+.intentReview,
+.variants {
+  display: grid;
+  gap: 0.875rem;
+}
+
+.panel h1,
+.intentReview h2,
+.variants h2 {
+  font-size: 1rem;
+  margin: 0;
+}
+
+.reactions,
+.variantActions,
+.variantsHeading {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.reaction,
+.variantActions button,
+.variantsHeading button,
+.rejectAll {
+  background: #fff;
+  border: 1px solid #b8bdc8;
+  border-radius: 0.5rem;
+  color: #242832;
+  cursor: pointer;
+  min-height: 2.25rem;
+  padding: 0.4rem 0.7rem;
+}
+
+.reaction[aria-pressed="true"] {
+  background: #242832;
+  border-color: #242832;
+  color: #fff;
+}
+
+.textLabel,
+.inspector label,
+.tokenChecklist label {
+  display: grid;
+  font-size: 0.875rem;
+  gap: 0.35rem;
+}
+
+.textLabel textarea {
+  font: inherit;
+  min-height: 4.75rem;
+  padding: 0.5rem;
+}
+
+.primaryAction {
+  background: #242832;
+  border: 0;
+  border-radius: 0.5rem;
+  color: #fff;
+  cursor: pointer;
+  min-height: 2.5rem;
+  padding: 0.5rem 0.875rem;
+  width: fit-content;
+}
+
+.inspector,
+.tokenChecklist {
+  border: 1px solid #d8dbe2;
+  border-radius: 0.5rem;
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.75rem;
+}
+
+.inspector {
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+}
+
+.inspector legend,
+.tokenChecklist legend {
+  font-weight: 600;
+}
+
+.inspector p {
+  grid-column: 1 / -1;
+}
+
+.intentColumns,
+.variantGrid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+}
+
+.tokenChecklist label {
+  align-items: center;
+  grid-template-columns: auto 1fr;
+}
+
+.variantsHeading {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.variant {
+  background: #f8f9fb;
+  border: 1px solid #d8dbe2;
+  border-radius: 0.5rem;
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.75rem;
+}
+
+.variantKind {
+  color: #5f6470;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.75rem;
+  margin: 0;
+}
+
+.rejectAll {
+  border-color: #a83a3a;
+  color: #8c2525;
+  width: fit-content;
 }

@@ -27,7 +27,7 @@ gates:
     plan: "plans/02-controlled-ui-language.md"
     required_assertions: ["ui.valid_spec_renders_deterministically", "ui.invalid_specs_fail_closed", "ui.button_accessibility_states_pass", "ui.generated_props_are_constrained", "ui.storybook_matches_catalog"]
   critique-refine-loop:
-    activation: ["apps/ai/src/itl_ai/generation/**", "apps/ai/src/itl_ai/critique/**", "apps/web/src/features/refine/**", "contracts/refine/**"]
+    activation: ["apps/ai/src/itl_ai/refine/**", "apps/ai/src/itl_ai/main.py", "apps/web/src/features/refine/**", "apps/web/src/features/canvas/**", "contracts/refine/**"]
     evidence: "evidence/gates/critique-refine-loop.json"
     plan: "plans/03-critique-refine-loop.md"
     required_assertions: ["refine.critique_yields_reviewable_patch_intent", "refine.locks_are_preserved", "refine.explored_values_are_valid", "refine.rejection_is_not_a_preference", "refine.invalid_model_output_preserves_current_spec"]
