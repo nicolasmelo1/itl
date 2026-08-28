@@ -1,0 +1,18 @@
+{
+  "name": "itl",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.21.0",
+  "engines": {
+    "node": ">=22.22.1"
+  },
+  "scripts": {
+    "dev:web": "pnpm --filter @itl/web dev",
+    "dev:ai": "uv --directory apps/ai run uvicorn itl_ai.main:app --reload",
+    "lint": "pnpm --filter @itl/web lint && uv --directory apps/ai run ruff check .",
+    "typecheck": "pnpm --filter @itl/web typecheck && uv --directory apps/ai run pyright",
+    "test": "pnpm --filter @itl/web test && uv --directory apps/ai run pytest",
+    "build": "pnpm --filter @itl/web build && uv --directory apps/ai build",
+    "verify:project-setup": "node scripts/verify-project-setup.mjs"
+  }
+}

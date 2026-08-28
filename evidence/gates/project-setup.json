@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "gate": "project-setup",
+  "implementation_sha256": "8571be1527ab80903d9c031af355a99f2a19921d346522b38930927f2d778c9a",
+  "runs": [
+    {
+      "scenario": "project-setup",
+      "status": "passed",
+      "actor": "Codex",
+      "report": "evidence/reports/project-setup.json",
+      "report_sha256": "c96d3c342a71741e022c233a0d03121c01c292113a23fb3fabcc0824d891f3b0",
+      "required_assertions": [
+        "setup.lockfiles_reproducible",
+        "setup.shells_start_without_provider",
+        "setup.quality_commands_pass",
+        "setup.factory_green",
+        "setup.factory_fixtures_excluded"
+      ]
+    }
+  ]
+}
