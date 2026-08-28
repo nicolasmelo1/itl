@@ -1,0 +1,43 @@
+[project]
+name = "itl-ai"
+version = "0.1.0"
+description = "FastAPI and DSPy service for Interactive Taste Learning"
+authors = [
+    { name = "Nicolas Melo", email = "nicolasmelo12@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "dspy<3",
+    "fastapi>=0.141.1",
+    "uvicorn[standard]>=0.52.4",
+]
+
+[project.scripts]
+itl-ai = "itl_ai.main:run"
+
+[build-system]
+requires = ["uv_build>=0.12.3,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1.411",
+    "pytest>=9.1.1",
+    "ruff>=0.16.5",
+]
+
+[tool.pyright]
+include = ["src"]
+exclude = [".venv", "../../.software-factory/mutations"]
+pythonVersion = "3.12"
+typeCheckingMode = "strict"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = [".venv", "../../.software-factory/mutations"]
+
+[tool.ruff]
+extend-exclude = ["../../.software-factory/mutations"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]

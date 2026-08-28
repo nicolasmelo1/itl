@@ -1,0 +1,103 @@
+# Which rules this repository enforces, and how its paths map onto the
+# catalog's neutral vocabulary. `sf explain <RULE>` prints the reasoning
+# behind any rule below.
+version: 1
+project:
+  name: itl
+  languages: [python, typescript]
+  exclude: []
+
+docs:
+  scan:
+    - "docs/**/*.md"
+    - "*.md"
+
+# Gates activate from implementation paths, never from test paths, labels, or
+# pull-request prose. Evidence must be re-run and sealed after each relevant
+# implementation change; see L3.GATE_HAS_FRESH_EVIDENCE.
+gates:
+  project-setup:
+    activation: ["package.json", "pnpm-workspace.yaml", "pnpm-lock.yaml", "apps/web/package.json", "apps/web/tsconfig.json", "apps/web/next.config.*", "apps/web/src/app/**", "apps/ai/pyproject.toml", "apps/ai/uv.lock", "apps/ai/src/itl_ai/main.py", "apps/ai/src/itl_ai/config/**"]
+    evidence: "evidence/gates/project-setup.json"
+    plan: "plans/01-project-setup.md"
+    required_assertions: ["setup.lockfiles_reproducible", "setup.shells_start_without_provider", "setup.quality_commands_pass", "setup.factory_green", "setup.factory_fixtures_excluded"]
+  controlled-ui-language:
+    activation: ["packages/design-system/src/**", "packages/ui-catalog/src/**", "apps/web/src/features/canvas/**", "apps/web/.storybook/**"]
+    evidence: "evidence/gates/controlled-ui-language.json"
+    plan: "plans/02-controlled-ui-language.md"
+    required_assertions: ["ui.valid_spec_renders_deterministically", "ui.invalid_specs_fail_closed", "ui.button_accessibility_states_pass", "ui.generated_props_are_constrained", "ui.storybook_matches_catalog"]
+  critique-refine-loop:
+    activation: ["apps/ai/src/itl_ai/generation/**", "apps/ai/src/itl_ai/critique/**", "apps/web/src/features/refine/**", "contracts/refine/**"]
+    evidence: "evidence/gates/critique-refine-loop.json"
+    plan: "plans/03-critique-refine-loop.md"
+    required_assertions: ["refine.critique_yields_reviewable_patch_intent", "refine.locks_are_preserved", "refine.explored_values_are_valid", "refine.rejection_is_not_a_preference", "refine.invalid_model_output_preserves_current_spec"]
+  memory-exploration-validation:
+    activation: ["apps/ai/src/itl_ai/preference/**", "apps/ai/src/itl_ai/retrieval/**", "apps/ai/src/itl_ai/evaluation/**", "apps/web/src/features/memory/**", "data/migrations/**"]
+    evidence: "evidence/gates/memory-exploration-validation.json"
+    plan: "plans/04-memory-exploration-validation.md"
+    required_assertions: ["memory.explicit_feedback_is_immutable_and_queryable", "memory.retrieval_is_auditable_and_contextual", "exploration.policies_are_distinct_and_non_coercive", "evaluation.counterfactual_constraints_hold", "evaluation.holdout_is_excluded_from_optimization"]
+
+rules:
+  # L2 — The guardrail's own configuration is hash-locked
+  L2.FACTORY_CONFIG_IS_LOCKED:
+    enabled: true
+  # L2 — The guardrail may be strengthened, never quietly weakened
+  L2.POLICY_ONLY_TIGHTENS:
+    enabled: true
+  # L3 — A gate requires every check its plan's criteria name
+  L3.GATE_COVERS_THE_PLAN:
+    enabled: true
+  # L3 — A gate activated by touched paths needs digest-verified, non-stale evidence
+  L3.GATE_HAS_FRESH_EVIDENCE:
+    enabled: true
+  # L1 — No function exceeds the cyclomatic ceiling
+  L1.COMPLEXITY_CEILING:
+    enabled: true
+  # L1 — Every suppression names a code and a reason
+  L1.NO_BLANKET_SUPPRESSION:
+    enabled: true
+  # L1 — The untyped escape hatch is banned, and the message names the alternative
+  L1.NO_UNTYPED_ESCAPE_HATCH:
+    enabled: true
+  # L1 — A skipped or expected-to-fail test says why
+  L1.SKIPPED_TESTS_STATE_A_REASON:
+    enabled: true
+  # L4 — Every marked promise names the gate that proves it
+  L4.CLAIM_CITES_ITS_EVIDENCE:
+    enabled: true
+  # L4 — Repo-relative documentation links resolve
+  L4.DOC_LINKS_RESOLVE:
+    enabled: true
+  # L4 — Every enabled rule is cited in prose, and every citation resolves
+  L4.EVERY_RULE_HAS_A_WHY:
+    enabled: true
+  # L4 — Every acceptance criterion names the check that proves it
+  L4.PLAN_CRITERION_NAMES_ITS_CHECK:
+    enabled: true
+  # L4 — Every plan declares its exit condition and sits in the execution order
+  L4.PLAN_DECLARES_EXIT_CONDITION:
+    enabled: true
+  # L4 — New top-level files are declared before they appear
+  L4.ROOT_FILES_ARE_DECLARED:
+    enabled: true
+  # L4 — Every command a rule's prose quotes is one this `sf` accepts
+  L4.RULE_PROSE_NAMES_A_REAL_COMMAND:
+    enabled: true
+  # L5 — Every enabled rule has a mutation that proves it fires
+  L5.EVERY_CHECK_HAS_A_MUTATION_TEST:
+    enabled: true
+  # L5 — An enabled rule must be capable of producing a finding
+  L5.NO_INERT_RULE:
+    enabled: true
+  # L6 — Something audits dependencies for known vulnerabilities
+  L6.DEPENDENCY_VULNERABILITIES_ARE_SCANNED:
+    enabled: true
+  # L6 — Something scans the code for known-insecure patterns
+  L6.INSECURE_PATTERNS_ARE_SCANNED:
+    enabled: true
+  # L6 — Something scans for committed secrets
+  L6.SECRETS_ARE_SCANNED:
+    enabled: true
+  # L6 — Something scans the CI workflows themselves
+  L6.WORKFLOWS_ARE_SCANNED:
+    enabled: true
