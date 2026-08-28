@@ -91,7 +91,8 @@ def _assert_acyclic(root: str, elements: dict[str, object]) -> None:
             return
         visiting.add(element_id)
         raw_element = elements[element_id]
-        assert isinstance(raw_element, dict)
+        if not isinstance(raw_element, dict):
+            raise _error("invalid_spec", "An element is not a JSON object.", f"/elements/{element_id}")
         children = cast(list[str], cast(dict[str, object], raw_element)["children"])
         for child in children:
             visit(child)
@@ -175,7 +176,8 @@ def _create_variant(
 ) -> Variant:
     candidate = deepcopy(current)
     raw_target = _elements(candidate)[intent.targetElementId]
-    assert isinstance(raw_target, dict)
+    if not isinstance(raw_target, dict):
+        raise _error("invalid_target", "Select a registered Button before refining.")
     candidate_props = _element_props(cast(dict[str, object], raw_target))
     for path in intent.explorationPaths:
         token = path.removeprefix("/props/")
