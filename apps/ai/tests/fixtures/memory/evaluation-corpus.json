@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "optimizerTrainingIds": [],
+  "scenarios": [
+    {
+      "id": "dev-dashboard-square",
+      "split": "development",
+      "context": "dense dashboard",
+      "copy": "Save filters",
+      "expectedLockedPaths": ["/props/radius"]
+    },
+    {
+      "id": "holdout-marketing-pill",
+      "split": "hidden_human_review",
+      "context": "marketing CTA",
+      "copy": "Start free trial",
+      "expectedLockedPaths": ["/props/radius"]
+    }
+  ]
+}

@@ -5,6 +5,7 @@ These models deliberately live in the Python service. The JSON fixtures under
 the other application's runtime types.
 """
 
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -76,10 +77,14 @@ class ErrorResponse(StrictModel):
 class GenerateSpecRequest(StrictModel):
     target: Literal["Button"] = "Button"
     prompt: str = Field(default="A primary action", min_length=1, max_length=4_000)
+    sessionId: str = Field(default="local", pattern=r"^[a-zA-Z0-9_-]{1,80}$")
+    context: str | None = Field(default=None, max_length=200)
 
 
 class GenerateSpecResponse(StrictModel):
     spec: dict[str, object]
+    evidenceIds: list[int] = []
+    outputId: str
 
 
 class ParseCritiqueRequest(StrictModel):
@@ -109,13 +114,73 @@ class GenerateVariantsRequest(StrictModel):
     targetElementId: str = Field(pattern=r"^[a-z][a-z0-9-]*$")
     intent: PatchIntent
     includeWild: bool = False
+    sessionId: str = Field(default="local", pattern=r"^[a-zA-Z0-9_-]{1,80}$")
+    context: str | None = Field(default=None, max_length=200)
 
 
 class Variant(StrictModel):
     id: str
     kind: Literal["exploit", "adjacent_explore", "wild_explore"]
+    direction: str
     spec: dict[str, object]
 
 
 class GenerateVariantsResponse(StrictModel):
     variants: list[Variant]
+    evidenceIds: list[int] = []
+    outputId: str
+
+
+class PreferenceEventRequest(StrictModel):
+    """An explicit, append-only action from the refinement UI."""
+
+    sessionId: str = Field(default="local", pattern=r"^[a-zA-Z0-9_-]{1,80}$")
+    componentType: Literal["Button"] = "Button"
+    context: str | None = Field(default=None, max_length=200)
+    targetElementId: str = Field(pattern=r"^[a-z][a-z0-9-]*$")
+    action: Literal[
+        "manual_edit",
+        "confirmed_critique",
+        "explicit_attribute_feedback",
+        "absolute_feedback",
+        "pairwise_choice",
+        "rejection",
+        "indifference",
+        "explore_more",
+    ]
+    source: Literal[
+        "manual_edit",
+        "confirmed_critique",
+        "explicit_attribute_feedback",
+        "absolute_feedback",
+        "pairwise_choice",
+        "model_inference",
+    ]
+    beforeSpec: dict[str, object]
+    afterSpec: dict[str, object] | None = None
+    selectedElementId: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]*$")
+    likedPaths: list[str] = []
+    dislikedPaths: list[str] = []
+    lockedPaths: list[str] = []
+    critique: str | None = Field(default=None, max_length=4_000)
+    parserInterpretation: PatchIntent | None = None
+
+
+class PreferenceEventResponse(StrictModel):
+    id: int
+    createdAt: datetime
+
+
+class RetrievedEvidence(StrictModel):
+    id: int
+    relation: Literal["supporting", "contradictory"]
+    source: str
+    context: str | None = None
+    likedPaths: list[str]
+    dislikedPaths: list[str]
+    lockedPaths: list[str]
+    critique: str | None = None
+
+
+class MemoryResponse(StrictModel):
+    evidence: list[RetrievedEvidence]
