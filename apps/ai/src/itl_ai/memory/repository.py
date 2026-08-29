@@ -15,6 +15,7 @@ SOURCE_CONFIDENCE = {
     "explicit_attribute_feedback": 40,
     "absolute_feedback": 30,
     "pairwise_choice": 20,
+    "candidate_acceptance": 25,
     "model_inference": 10,
 }
 
@@ -61,6 +62,7 @@ class PreferenceRepository:
                     before_snapshot_id INTEGER NOT NULL REFERENCES spec_snapshots(id),
                     after_snapshot_id INTEGER REFERENCES spec_snapshots(id),
                     selected_element_id TEXT,
+                    candidate_id TEXT,
                     liked_paths_json TEXT NOT NULL,
                     disliked_paths_json TEXT NOT NULL,
                     locked_paths_json TEXT NOT NULL,
@@ -85,6 +87,9 @@ class PreferenceRepository:
                     VALUES (1, CURRENT_TIMESTAMP);
                 """
             )
+            columns = {row["name"] for row in connection.execute("PRAGMA table_info(preference_events)")}
+            if "candidate_id" not in columns:
+                connection.execute("ALTER TABLE preference_events ADD COLUMN candidate_id TEXT")
 
     def add_event(self, event: PreferenceEventRequest) -> tuple[int, datetime]:
         created_at = datetime.now(UTC)
@@ -95,10 +100,10 @@ class PreferenceRepository:
                 """
                 INSERT INTO preference_events (
                     session_id, component_type, context, target_element_id, action, source,
-                    before_snapshot_id, after_snapshot_id, selected_element_id,
+                    before_snapshot_id, after_snapshot_id, selected_element_id, candidate_id,
                     liked_paths_json, disliked_paths_json, locked_paths_json, critique,
                     parser_interpretation_json, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     event.sessionId,
@@ -110,6 +115,7 @@ class PreferenceRepository:
                     before_id,
                     after_id,
                     event.selectedElementId,
+                    event.candidateId,
                     _json(event.likedPaths),
                     _json(event.dislikedPaths),
                     _json(event.lockedPaths),
@@ -144,11 +150,12 @@ class PreferenceRepository:
             locked = _decode_list(row["locked_paths_json"])
             event_paths = set(liked + disliked + locked)
             same_context = _normalise_context(row["context"]) == _normalise_context(context)
-            relation = "supporting" if same_context or not row["context"] else "contradictory"
+            context_relation = "exact" if same_context or not row["context"] else "mismatch"
             score = SOURCE_CONFIDENCE[row["source"]] + (100 if same_context else 0) + 15 * len(paths & event_paths)
             evidence = RetrievedEvidence(
                 id=row["id"],
-                relation=relation,
+                contextRelation=context_relation,
+                preferenceRelation="supporting" if same_context else "unknown",
                 source=row["source"],
                 context=row["context"],
                 likedPaths=liked,
@@ -158,10 +165,10 @@ class PreferenceRepository:
             )
             scored.append((score, row["id"], evidence))
 
-        # A contextual mismatch remains visible as contradictory evidence; it is never silently discarded.
-        supporting = sorted((item for item in scored if item[2].relation == "supporting"), reverse=True)
-        contradictory = sorted((item for item in scored if item[2].relation == "contradictory"), reverse=True)
-        selected = supporting[: max(1, limit - min(2, len(contradictory)))] + contradictory[:2]
+        # A contextual mismatch remains visible, but is not treated as a preference conflict.
+        supporting = sorted((item for item in scored if item[2].contextRelation == "exact"), reverse=True)
+        mismatched = sorted((item for item in scored if item[2].contextRelation == "mismatch"), reverse=True)
+        selected = supporting[: max(1, limit - min(2, len(mismatched)))] + mismatched[:2]
         return [item[2] for item in sorted(selected, reverse=True)[:limit]]
 
     def record_generation(

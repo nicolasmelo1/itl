@@ -8,10 +8,11 @@ type MemoryAction =
   | "explicit_attribute_feedback"
   | "absolute_feedback"
   | "pairwise_choice"
+  | "candidate_acceptance"
   | "rejection"
   | "indifference"
   | "explore_more";
-type MemorySource = "manual_edit" | "confirmed_critique" | "explicit_attribute_feedback" | "absolute_feedback" | "pairwise_choice" | "model_inference";
+type MemorySource = "manual_edit" | "confirmed_critique" | "explicit_attribute_feedback" | "absolute_feedback" | "pairwise_choice" | "candidate_acceptance" | "model_inference";
 
 export async function recordPreferenceEvent(input: {
   action: MemoryAction;
@@ -20,6 +21,7 @@ export async function recordPreferenceEvent(input: {
   afterSpec?: UISpec;
   targetElementId: string;
   selectedElementId?: string;
+  candidateId?: string;
   critique?: string;
   intent?: PatchIntent | null;
 }) {
@@ -38,6 +40,7 @@ export async function recordPreferenceEvent(input: {
         afterSpec: input.afterSpec,
         targetElementId: input.targetElementId,
         selectedElementId: input.selectedElementId,
+        candidateId: input.candidateId,
         likedPaths: input.intent?.likedPaths ?? [],
         dislikedPaths: input.intent?.dislikedPaths ?? [],
         lockedPaths: input.intent?.lockedPaths ?? [],

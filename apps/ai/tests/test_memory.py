@@ -1,7 +1,8 @@
 from pathlib import Path
+from typing import Literal, cast
 
 from itl_ai.memory.repository import PreferenceRepository
-from itl_ai.refine.models import GenerateSpecRequest, GenerateVariantsRequest, PreferenceEventRequest
+from itl_ai.refine.models import GenerateSpecRequest, GenerateVariantsRequest, PatchIntent, PreferenceEventRequest
 from itl_ai.refine.service import RefineService
 
 
@@ -30,7 +31,19 @@ def button_spec(label: str = "Continue", radius: str = "soft") -> dict[str, obje
     }
 
 
-def event(context: str, radius: str, source: str = "confirmed_critique") -> PreferenceEventRequest:
+def event(
+    context: str,
+    radius: str,
+    source: Literal[
+        "manual_edit",
+        "confirmed_critique",
+        "explicit_attribute_feedback",
+        "absolute_feedback",
+        "pairwise_choice",
+        "candidate_acceptance",
+        "model_inference",
+    ] = "confirmed_critique",
+) -> PreferenceEventRequest:
     return PreferenceEventRequest(
         sessionId="evaluation",
         componentType="Button",
@@ -73,8 +86,35 @@ def test_memory_retrieval_is_auditable_and_contextual(tmp_path: Path) -> None:
     evidence = refine.preference_memory("marketing CTA", {"/props/radius"}).evidence
 
     assert generated.evidenceIds == repository.evidence_for_output(generated.outputId)
-    assert evidence[0].id == cta.id and evidence[0].relation == "supporting"
-    assert any(item.id == dashboard.id and item.relation == "contradictory" for item in evidence)
+    assert evidence[0].id == cta.id
+    assert evidence[0].contextRelation == "exact"
+    assert evidence[0].preferenceRelation == "supporting"
+    assert any(
+        item.id == dashboard.id and item.contextRelation == "mismatch" and item.preferenceRelation == "unknown"
+        for item in evidence
+    )
+
+
+def test_candidate_acceptance_keeps_candidate_identity_separate_from_element_identity(tmp_path: Path) -> None:
+    refine, repository = service(tmp_path)
+    accepted = event("marketing CTA", "pill").model_copy(
+        update={
+            "action": "candidate_acceptance",
+            "source": "candidate_acceptance",
+            "selectedElementId": "continue-button",
+            "candidateId": "wild-explore-1",
+        }
+    )
+
+    refine.record_preference_event(accepted)
+    with repository._connection() as connection:
+        row = connection.execute(
+            "SELECT selected_element_id, candidate_id FROM preference_events WHERE id = 1"
+        ).fetchone()
+
+    assert row is not None
+    assert row["selected_element_id"] == "continue-button"
+    assert row["candidate_id"] == "wild-explore-1"
 
 
 def test_exploration_policies_are_distinct_and_non_coercive(tmp_path: Path) -> None:
@@ -84,15 +124,15 @@ def test_exploration_policies_are_distinct_and_non_coercive(tmp_path: Path) -> N
         spec=button_spec(),
         targetElementId="continue-button",
         sessionId="exploration",
-        intent={
-            "targetElementId": "continue-button",
-            "likedPaths": [],
-            "dislikedPaths": ["/props/radius"],
-            "lockedPaths": [],
-            "explorationPaths": ["/props/radius"],
-            "ambiguity": [],
-            "rationale": "Explore radius.",
-        },
+        intent=PatchIntent(
+            targetElementId="continue-button",
+            likedPaths=[],
+            dislikedPaths=["/props/radius"],
+            lockedPaths=[],
+            explorationPaths=["/props/radius"],
+            ambiguity=[],
+            rationale="Explore radius.",
+        ),
         includeWild=True,
     )
 
@@ -110,20 +150,22 @@ def test_evaluation_counterfactual_constraints_hold(tmp_path: Path) -> None:
         specVersion="itl.ui/v1",
         spec=button_spec(label="Pay $12.00"),
         targetElementId="continue-button",
-        intent={
-            "targetElementId": "continue-button",
-            "likedPaths": ["/props/background"],
-            "dislikedPaths": ["/props/radius"],
-            "lockedPaths": ["/props/background"],
-            "explorationPaths": ["/props/radius"],
-            "ambiguity": [],
-            "rationale": "Keep the accent, vary radius.",
-        },
+        intent=PatchIntent(
+            targetElementId="continue-button",
+            likedPaths=["/props/background"],
+            dislikedPaths=["/props/radius"],
+            lockedPaths=["/props/background"],
+            explorationPaths=["/props/radius"],
+            ambiguity=[],
+            rationale="Keep the accent, vary radius.",
+        ),
     )
     counterfactual = request.model_copy(update={"spec": button_spec(label="Transfer R$ 1.999,00")})
 
     for variant in refine.generate_variants(counterfactual).variants:
-        props = variant.spec["elements"]["continue-button"]["props"]
+        elements = cast(dict[str, object], variant.spec["elements"])
+        button = cast(dict[str, object], elements["continue-button"])
+        props = cast(dict[str, str], button["props"])
         assert props["label"] == "Transfer R$ 1.999,00"
         assert props["background"] == "accent"
 
