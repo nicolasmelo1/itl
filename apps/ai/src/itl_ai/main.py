@@ -17,6 +17,7 @@ from itl_ai.refine.models import (
     GenerateSpecResponse,
     GenerateVariantsRequest,
     GenerateVariantsResponse,
+    MemoryQuery,
     MemoryResponse,
     ParseCritiqueRequest,
     ParseCritiqueResponse,
@@ -33,6 +34,8 @@ app.add_middleware(
     allow_methods=["POST"],
     allow_headers=["Content-Type"],
 )
+
+
 def _refine_service() -> RefineService:
     settings = load_settings()
     return RefineService(PreferenceRepository(settings.preference_database_path), configured_provider(settings))
@@ -151,10 +154,10 @@ def record_preference_event(request: PreferenceEventRequest) -> PreferenceEventR
     return refine_service.record_preference_event(request)
 
 
-@app.get("/v1/preference-memory", response_model=MemoryResponse)
-def preference_memory(context: str | None = None, paths: list[str] | None = None) -> MemoryResponse:
+@app.post("/v1/preference-memory", response_model=MemoryResponse)
+def preference_memory(query: MemoryQuery) -> MemoryResponse:
     """Return bounded, contextual evidence for the Button generator and memory UI."""
-    return refine_service.preference_memory(context, set(paths or []))
+    return refine_service.preference_memory(query.context, query.evidence)
 
 
 def run() -> None:

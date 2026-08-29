@@ -29,17 +29,10 @@
   opacity: 0.56;
 }
 
-.button[data-variant="solid"] {
-  --button-hover-background: var(--color-accent-strong);
-}
-
-.button[data-variant="subtle"] {
-  --button-hover-background: var(--color-surface-raised);
-}
-
-.button[data-variant="outline"] {
-  --button-hover-background: var(--color-surface-raised);
-}
+.button[data-recipe="primary"] { background: var(--color-accent); border-color: transparent; color: var(--color-text-inverse); --button-hover-background: var(--color-accent-strong); }
+.button[data-recipe="secondary"] { background: var(--color-surface-raised); border-color: var(--color-border); color: var(--color-text); --button-hover-background: var(--color-surface); }
+.button[data-recipe="outline"] { background: transparent; border-color: var(--color-text); color: var(--color-text); --button-hover-background: var(--color-surface-raised); }
+.button[data-recipe="ghost"] { background: transparent; border-color: transparent; color: var(--color-text); --button-hover-background: var(--color-surface-raised); }
 
 .button[data-size="compact"] {
   --button-height: 2rem;
@@ -58,14 +51,6 @@
 .button[data-radius="pill"] { --button-radius: 999px; }
 .button[data-density="compact"] { letter-spacing: -0.015em; }
 .button[data-density="comfortable"] { letter-spacing: 0; }
-.button[data-background="accent"] { background: var(--color-accent); --button-hover-background: var(--color-accent-strong); }
-.button[data-background="surface"] { background: var(--color-surface); --button-hover-background: var(--color-surface-raised); }
-.button[data-background="transparent"] { background: transparent; --button-hover-background: var(--color-surface-raised); }
-.button[data-foreground="light"] { color: var(--color-text-inverse); }
-.button[data-foreground="dark"] { color: var(--color-text); }
-.button[data-border="none"] { border-color: transparent; }
-.button[data-border="subtle"] { border-color: var(--color-border); }
-.button[data-border="strong"] { border-color: var(--color-text); }
 .button[data-font-weight="regular"] { --button-font-weight: 500; }
 .button[data-font-weight="semibold"] { --button-font-weight: 650; }
 

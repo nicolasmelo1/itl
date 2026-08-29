@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "gate": "controlled-ui-language",
-  "implementation_sha256": "5683c891f644b7bb0f872f4664271f16175fd117864a11154fef61fa6c8c831d",
+  "implementation_sha256": "566e187804ccaa1700c94a84256fd1dde824dac610fd90970a1467cff6650438",
   "runs": [
     {
       "scenario": "controlled-ui-language",

@@ -2,7 +2,7 @@
 
 ITL is a local laboratory for learning a person's UI taste through a constrained refinement loop. Today it deliberately edits only one component—`Button`—so the product can answer a hard question before growing into a design system: after several interactions, can it propose alternatives that fit a person and the current surface without collapsing into one generic style?
 
-The browser renders a finite, schema-validated JSON UI spec. A person selects the Button, writes a critique, reviews the interpreted constraints, then asks the API for constrained alternatives. Explicit actions are recorded as append-only SQLite events. The service retrieves relevant evidence for later requests, while keeping evidence from another context visible rather than pretending it is a global rule.
+The browser renders a finite, schema-validated JSON UI spec. A person selects the Button in a toolbar, hero, or form, writes a critique, reviews the interpreted visual directives, then asks the API for constrained alternatives. Explicit actions are recorded as append-only SQLite events with typed role, surface, density, evidence, directives, and a spec diff.
 
 The application is deliberately narrow at this stage: Button only, controlled JSON UI specs (never screenshots), deterministic validation, and no global "beauty" score or vector database.
 
@@ -44,9 +44,9 @@ Open `http://localhost:3000`.
 ### 4. Run one refinement session
 
 1. Leave the `Continue` button selected.
-2. Enter a critique such as: “I like the color and spacing, but it is too rounded.”
+2. Choose a toolbar, hero, or form surface, then enter a critique such as: “I like the recipe and spacing, but it is too rounded.”
 3. Click **Review interpretation**. This is transient: no preference event is stored yet.
-4. Adjust Keep/Explore if necessary and click **Generate constrained alternatives**. This confirms the critique and persists `confirmed_critique`.
+4. Adjust Keep/Explore if necessary and click **Generate constrained alternatives**. This confirms the critique and persists `confirmed_critique`; a parser result alone is never stored as evidence.
 5. Accept an option, reject all, or give attribute feedback. An accepted variant is stored as `candidate_acceptance`; its candidate ID is separate from the UI element ID.
 
 The browser sends interpretation and variant generation to FastAPI. TypeScript owns rendering and validates every returned spec before it is shown. The API owns the deterministic candidate policy and the SQLite memory boundary.
@@ -59,10 +59,9 @@ Button spec → critique → review → FastAPI interpretation → candidates �
                                       └──── deterministic validation ─────┘
 ```
 
-- The editable vocabulary is finite; arbitrary CSS, colors, and unregistered components are rejected.
+- The editable vocabulary is finite and visual only. A coherent recipe derives background, foreground, border, hover, and focus tokens together; arbitrary CSS, colors, content, state, and unregistered components are rejected.
 - A raw event is never overwritten. Direct edits have stronger evidence than an inferred critique.
-- Context is retained in memory. A mismatch is not automatically a conflicting preference.
-- Current refinement semantics are intentionally conservative. The richer contextual Button contract is tracked in [Plan 05](plans/05-button-contextual-lab.md).
+- Context is retained as role, surface, and density. Retrieval independently reports exact/compatible/global/mismatch context and supporting/conflicting/unknown preference relations.
 
 ## Optional model providers
 
@@ -109,4 +108,5 @@ The current deterministic completion gates are:
 ```sh
 pnpm verify:controlled-ui-language
 pnpm verify:memory-exploration-validation
+pnpm verify:button-contextual-lab
 ```

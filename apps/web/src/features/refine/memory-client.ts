@@ -1,6 +1,6 @@
 import type { UISpec } from "@itl/ui-catalog";
 
-import type { PatchIntent } from "./refine-engine";
+import type { AttributeDirective, DesignContext, Interpretation, PreferenceEvidence } from "./refine-engine";
 
 type MemoryAction =
   | "manual_edit"
@@ -12,7 +12,14 @@ type MemoryAction =
   | "rejection"
   | "indifference"
   | "explore_more";
-type MemorySource = "manual_edit" | "confirmed_critique" | "explicit_attribute_feedback" | "absolute_feedback" | "pairwise_choice" | "candidate_acceptance" | "model_inference";
+type MemorySource =
+  | "manual_edit"
+  | "confirmed_critique"
+  | "explicit_attribute_feedback"
+  | "absolute_feedback"
+  | "pairwise_choice"
+  | "candidate_acceptance"
+  | "model_inference";
 
 export async function recordPreferenceEvent(input: {
   action: MemoryAction;
@@ -20,37 +27,43 @@ export async function recordPreferenceEvent(input: {
   beforeSpec: UISpec;
   afterSpec?: UISpec;
   targetElementId: string;
+  context: DesignContext;
+  evidence?: PreferenceEvidence;
+  directives?: AttributeDirective[];
   selectedElementId?: string;
   candidateId?: string;
   critique?: string;
-  intent?: PatchIntent | null;
+  interpretation?: Interpretation | null;
 }) {
   if (typeof window === "undefined" || typeof fetch === "undefined") return false;
   try {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_AI_BASE_URL ?? "http://127.0.0.1:8000"}/v1/preference-events`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sessionId: "local",
-        componentType: "Button",
-        context: "controlled canvas",
-        action: input.action,
-        source: input.source,
-        beforeSpec: input.beforeSpec,
-        afterSpec: input.afterSpec,
-        targetElementId: input.targetElementId,
-        selectedElementId: input.selectedElementId,
-        candidateId: input.candidateId,
-        likedPaths: input.intent?.likedPaths ?? [],
-        dislikedPaths: input.intent?.dislikedPaths ?? [],
-        lockedPaths: input.intent?.lockedPaths ?? [],
-        critique: input.critique,
-        parserInterpretation: input.intent ?? undefined,
-      }),
-    });
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_AI_BASE_URL ?? "http://127.0.0.1:8000"}/v1/preference-events`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: "local",
+          componentType: "Button",
+          ...input,
+          evidence: input.evidence ?? input.interpretation?.evidence ?? emptyEvidence(input.action),
+          directives: input.directives ?? input.interpretation?.directives ?? [],
+          parserInterpretation: input.interpretation ?? undefined,
+        }),
+      },
+    );
     return response.ok;
   } catch {
     // The local canvas remains usable when the optional AI service is offline.
     return false;
   }
+}
+
+function emptyEvidence(action: MemoryAction): PreferenceEvidence {
+  return {
+    likedPaths: [],
+    dislikedPaths: [],
+    lockedPaths: [],
+    strength: action === "manual_edit" ? "strong" : "weak",
+  };
 }

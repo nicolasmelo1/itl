@@ -1,6 +1,6 @@
 import { type UISpec, validateUISpec } from "@itl/ui-catalog";
 
-import type { PatchIntent, RefineVariant } from "./refine-engine";
+import type { DesignContext, Interpretation, RefineVariant } from "./refine-engine";
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_AI_BASE_URL ?? "http://127.0.0.1:8000";
 
@@ -26,26 +26,26 @@ export async function parseCritique(request: {
   spec: UISpec;
   targetElementId: string;
   critique: string;
-}): Promise<PatchIntent> {
-  const response = await post<{ intent: PatchIntent }>("/v1/refine/parse-critique", {
+}): Promise<Interpretation> {
+  const response = await post<{ interpretation: Interpretation }>("/v1/refine/parse-critique", {
     specVersion: "itl.ui/v1",
     ...request,
   });
-  return response.intent;
+  return response.interpretation;
 }
 
 export async function generateVariants(request: {
   spec: UISpec;
   targetElementId: string;
-  intent: PatchIntent;
+  interpretation: Interpretation;
   includeWild: boolean;
+  context: DesignContext;
 }): Promise<RefineVariant[]> {
   const response = await post<{ variants: Array<Omit<RefineVariant, "spec"> & { spec: unknown }> }>(
     "/v1/refine/generate-variants",
     {
       specVersion: "itl.ui/v1",
       sessionId: "local",
-      context: "controlled canvas",
       ...request,
     },
   );
@@ -55,4 +55,3 @@ export async function generateVariants(request: {
     return { ...variant, spec: validation.spec };
   });
 }
-

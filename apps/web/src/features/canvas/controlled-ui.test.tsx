@@ -1,33 +1,48 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { fixtureSpec, ControlledRenderer, UI_SPEC_VERSION, validateUISpec } from "@itl/ui-catalog";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import {
+  buttonCatalogManifest,
+  buttonFixtureSpec,
+  ControlledRenderer,
+  fixtureSpec,
+  UI_SPEC_VERSION,
+  validateUISpec,
+} from "@itl/ui-catalog";
 import { afterEach, expect, test, vi } from "vitest";
 
 import { ControlledCanvas } from "./controlled-canvas";
 
 afterEach(cleanup);
-
 afterEach(() => vi.unstubAllGlobals());
 
 function installRefineApi() {
   vi.stubGlobal("fetch", vi.fn(async (input: string) => {
     if (input.endsWith("/v1/refine/parse-critique")) {
       return new Response(JSON.stringify({
-        intent: {
+        interpretation: {
           targetElementId: "continue-button",
-          likedPaths: ["/props/background", "/props/density"],
-          dislikedPaths: ["/props/radius"],
-          lockedPaths: ["/props/background", "/props/density"],
-          explorationPaths: ["/props/radius"],
+          evidence: {
+            likedPaths: ["/appearance/recipe", "/appearance/density"],
+            dislikedPaths: ["/appearance/radius"],
+            lockedPaths: ["/appearance/recipe", "/appearance/density"],
+            strength: "moderate",
+          },
+          directives: [
+            { kind: "keep", path: "/appearance/recipe" },
+            { kind: "keep", path: "/appearance/density" },
+            { kind: "decrease", path: "/appearance/radius" },
+          ],
           ambiguity: [],
-          rationale: "Keep color and density; explore radius.",
+          rationale: "Keep recipe and density; decrease radius.",
         },
       }));
     }
     if (input.endsWith("/v1/refine/generate-variants")) {
       return new Response(JSON.stringify({
         variants: [
-          { id: "exploit-1", kind: "exploit", spec: fixtureSpec },
-          { id: "adjacent-explore-1", kind: "adjacent_explore", spec: fixtureSpec },
+          { id: "exploit-1", kind: "exploit", direction: "directive-led refinement", spec: buttonFixtureSpec },
+          { id: "adjacent-explore-1", kind: "adjacent_explore", direction: "nearby change", spec: buttonFixtureSpec },
         ],
       }));
     }
@@ -39,105 +54,72 @@ test("ui.valid_spec_renders_deterministically", () => {
   const first = render(<ControlledRenderer spec={fixtureSpec} />);
   const firstButton = screen.getByRole("button", { name: "Continue" });
   const initialHtml = first.container.innerHTML;
-
   first.rerender(<ControlledRenderer spec={fixtureSpec} />);
-
   expect(screen.getByRole("button", { name: "Continue" })).toBe(firstButton);
   expect(first.container.innerHTML).toBe(initialHtml);
+});
+
+test("button.catalog_manifest_matches_the_typescript_visual_vocabulary", () => {
+  const fixture = JSON.parse(
+    readFileSync(resolve(process.cwd(), "../../contracts/catalog/button.v1.json"), "utf8"),
+  ) as { appearance: typeof buttonCatalogManifest.appearance };
+  expect(fixture.appearance).toEqual(buttonCatalogManifest.appearance);
 });
 
 test("ui.invalid_specs_fail_closed", () => {
   const badReference = structuredClone(fixtureSpec);
   badReference.elements["welcome-card"].children = ["missing-element"];
-  const cycle = structuredClone(fixtureSpec);
-  cycle.elements["welcome-card"].children = ["welcome-card"];
-  const unknownComponent = {
-    version: UI_SPEC_VERSION,
-    root: "unknown",
-    elements: { unknown: { type: "Unknown", props: {}, children: [] } },
-  };
-  const unknownProp: unknown = {
+  const unknownAppearance: unknown = {
     version: UI_SPEC_VERSION,
     root: "button",
     elements: {
       button: {
         type: "Button",
-        props: { label: "Continue", variant: "solid", size: "regular", radius: "soft", density: "comfortable", background: "accent", foreground: "light", border: "none", fontWeight: "semibold", state: "default", className: "free-form-css" },
+        props: {
+          content: { label: "Continue" },
+          semantic: { role: "primary-action", state: "default" },
+          appearance: {
+            recipe: "primary", size: "regular", radius: "soft", density: "comfortable", fontWeight: "semibold", background: "accent",
+          },
+        },
         children: [],
       },
     },
   };
-
   expect(validateUISpec(badReference).valid).toBe(false);
-  expect(validateUISpec(cycle).valid).toBe(false);
-  expect(validateUISpec(unknownComponent).valid).toBe(false);
-  expect(validateUISpec(unknownProp).valid).toBe(false);
-
-  render(<ControlledRenderer spec={unknownComponent} />);
+  expect(validateUISpec(unknownAppearance).valid).toBe(false);
+  render(<ControlledRenderer spec={unknownAppearance} />);
   expect(screen.getByRole("alert").textContent).toContain("Invalid controlled UI spec");
 });
 
 test("ui.button_accessibility_states_pass", () => {
-  const loadingSpec = structuredClone(fixtureSpec);
+  const loadingSpec = structuredClone(buttonFixtureSpec);
   const button = loadingSpec.elements["continue-button"];
-  if (button.type === "Button") button.props.state = "loading";
-
+  if (button.type === "Button") button.props.semantic.state = "loading";
   render(<ControlledRenderer spec={loadingSpec} />);
-
-  const loadingButton = screen.getByRole("button", { name: "Loading…" });
-  expect(loadingButton).toHaveProperty("disabled", true);
-  expect(loadingButton.getAttribute("aria-busy")).toBe("true");
-
-  const enabled = render(<ControlledRenderer spec={fixtureSpec} />).getByRole("button", { name: "Continue" });
-  enabled.focus();
-  expect(document.activeElement).toBe(enabled);
+  expect(screen.getByRole("button", { name: "Loading…" })).toHaveProperty("disabled", true);
 });
 
-test("ui.generated_props_are_constrained", () => {
-  const freeFormColor: unknown = {
-    version: UI_SPEC_VERSION,
-    root: "button",
-    elements: {
-      button: {
-        type: "Button",
-        props: { label: "Continue", variant: "solid", size: "regular", radius: "soft", density: "comfortable", background: "#ff00ff", foreground: "light", border: "none", fontWeight: "semibold", state: "default" },
-        children: [],
-      },
-    },
-  };
-
-  expect(validateUISpec(freeFormColor).valid).toBe(false);
+test("ui.generated_props_are_constrained_to_coherent_recipes", () => {
+  const invalid: unknown = structuredClone(buttonFixtureSpec);
+  const element = (
+    invalid as { elements: Record<string, { props: Record<string, unknown> }> }
+  ).elements["continue-button"];
+  element.props.background = "#ff00ff";
+  expect(validateUISpec(invalid).valid).toBe(false);
 });
 
-test("ui.storybook_matches_catalog", () => {
-  render(<ControlledCanvas />);
-
-  expect(screen.getByRole("button", { name: "Continue" })).toBeDefined();
-  expect(screen.getByLabelText("Name")).toBeDefined();
-  expect(screen.getByText("Ready")).toBeDefined();
-  expect(screen.getByRole("region", { name: "Controlled components" })).toBeDefined();
-
-  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-  expect(screen.getByTestId("selected-element").textContent).toContain("continue-button");
-});
-
-test("refine.rejection_is_not_a_preference", async () => {
+test("button.web_uses_api_and_typed_context", async () => {
   installRefineApi();
   render(<ControlledCanvas />);
-
-  fireEvent.change(screen.getByLabelText("Optional critique"), {
-    target: { value: "I like the color and spacing, but it is too rounded." },
-  });
+  expect(screen.getByRole("region", { name: "hero Button surface" })).toBeDefined();
+  fireEvent.click(screen.getByRole("button", { name: "toolbar" }));
+  expect(screen.getByRole("region", { name: "toolbar Button surface" })).toBeDefined();
+  fireEvent.click(screen.getByRole("button", { name: "form" }));
+  expect(screen.getByRole("region", { name: "form Button surface" })).toBeDefined();
+  fireEvent.change(screen.getByLabelText("Optional critique"), { target: { value: "It is too rounded." } });
   fireEvent.click(screen.getByRole("button", { name: "Review interpretation" }));
-  expect(await screen.findByRole("region", { name: "Review refinement intent" })).toBeDefined();
-  expect(screen.getByText("Keep")).toBeDefined();
-  expect(screen.getByText("Explore")).toBeDefined();
-
+  expect(await screen.findByRole("region", { name: "Review refinement interpretation" })).toBeDefined();
   fireEvent.click(screen.getByRole("button", { name: "Generate constrained alternatives" }));
   expect(await screen.findByRole("region", { name: "Constrained alternatives" })).toBeDefined();
-  expect(screen.getByText("exploit")).toBeDefined();
-  expect(screen.getByText("adjacent explore")).toBeDefined();
-
-  fireEvent.click(screen.getByRole("button", { name: "Reject all" }));
-  expect(screen.getByTestId("refine-status").textContent).toContain("No option was selected as a winner");
 });

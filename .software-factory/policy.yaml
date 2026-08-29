@@ -36,6 +36,11 @@ gates:
     evidence: "evidence/gates/memory-exploration-validation.json"
     plan: "plans/04-memory-exploration-validation.md"
     required_assertions: ["memory.explicit_feedback_is_immutable_and_queryable", "memory.retrieval_is_auditable_and_contextual", "exploration.policies_are_distinct_and_non_coercive", "evaluation.counterfactual_constraints_hold", "evaluation.holdout_is_excluded_from_optimization"]
+  button-contextual-lab:
+    activation: ["contracts/catalog/button.v1.json", "packages/design-system/src/**", "packages/ui-catalog/src/**", "apps/ai/src/itl_ai/refine/**", "apps/ai/src/itl_ai/memory/**", "apps/ai/src/itl_ai/main.py", "apps/web/src/features/refine/**", "apps/web/src/features/canvas/**"]
+    evidence: "evidence/gates/button-contextual-lab.json"
+    plan: "plans/05-button-contextual-lab.md"
+    required_assertions: ["button.directives_preserve_direction", "button.recipes_are_coherent", "button.taste_space_is_visual_only", "button.web_uses_api_and_typed_context", "button.retrieval_is_contextual"]
 
 rules:
   # L2 — The guardrail's own configuration is hash-locked

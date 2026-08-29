@@ -15,6 +15,11 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     "../../.software-factory/mutations/**",
   ]),
+  {
+    rules: {
+      "max-len": ["error", { code: 120, ignoreUrls: true, ignoreStrings: true, ignoreTemplateLiterals: true }],
+    },
+  },
 ]);
 
 export default eslintConfig;

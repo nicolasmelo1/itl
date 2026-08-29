@@ -1,0 +1,25 @@
+{
+  "version": "itl.catalog/button.v1",
+  "component": "Button",
+  "content": {
+    "label": { "type": "string", "minLength": 1 }
+  },
+  "semantic": {
+    "role": ["primary-action", "secondary-action"],
+    "state": ["default", "disabled", "loading"]
+  },
+  "appearance": {
+    "recipe": ["primary", "secondary", "outline", "ghost"],
+    "size": ["compact", "regular"],
+    "radius": ["square", "soft", "pill"],
+    "density": ["compact", "comfortable"],
+    "fontWeight": ["regular", "semibold"]
+  },
+  "orderedAppearance": ["size", "radius", "density", "fontWeight"],
+  "recipeTokens": {
+    "primary": { "background": "accent", "foreground": "light", "border": "none", "hover": "accent-strong", "focus": "accent" },
+    "secondary": { "background": "surface-raised", "foreground": "dark", "border": "subtle", "hover": "surface", "focus": "accent" },
+    "outline": { "background": "transparent", "foreground": "dark", "border": "strong", "hover": "surface-raised", "focus": "accent" },
+    "ghost": { "background": "transparent", "foreground": "dark", "border": "none", "hover": "surface-raised", "focus": "accent" }
+  }
+}
