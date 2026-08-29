@@ -25,6 +25,19 @@ engine produces directional exploit, adjacent, and opt-in named wild candidates.
 - Recipes (`primary`, `secondary`, `outline`, `ghost`) derive background,
   foreground, border, hover, and focus tokens. Generated specs cannot express
   those implementation tokens independently.
+- An interpretation is transient until the person confirms it. Only then is it
+  persisted as `confirmed_critique`; an unconfirmed parser result is not
+  elevated to evidence.
+- `candidate_acceptance` and `pairwise_choice` are separate actions.
+  Candidate identity is stored in `candidateId`, never overloaded into an
+  element ID.
+- Retrieval reports two independent relations: context (`exact`, `compatible`,
+  `global`, `mismatch`) and preference (`supporting`, `conflicting`,
+  `unknown`). A different surface is not itself a contradiction.
+- For the MVP, live OpenAI-compatible providers remain direct, JSON-only HTTP
+  adapters. DSPy is optional experimentation infrastructure, not a hidden
+  runtime dependency; `GenerateVariants` is removed because candidate
+  materialization is deterministic.
 
 ## Work sequence
 
@@ -46,6 +59,9 @@ engine produces directional exploit, adjacent, and opt-in named wild candidates.
    component + role + surface + evidence strength, no embeddings.
 7. Run several local sessions, retain the raw observations, then decide whether
    Input, Card, or any molecule is justified.
+
+The adjacent budget is revised together with the policy semantics; it must be
+expressed directly as a ratio, not inferred from enum indexes.
 
 ## Acceptance criteria
 

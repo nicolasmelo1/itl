@@ -144,6 +144,7 @@ class PreferenceEventRequest(StrictModel):
         "explicit_attribute_feedback",
         "absolute_feedback",
         "pairwise_choice",
+        "candidate_acceptance",
         "rejection",
         "indifference",
         "explore_more",
@@ -154,11 +155,13 @@ class PreferenceEventRequest(StrictModel):
         "explicit_attribute_feedback",
         "absolute_feedback",
         "pairwise_choice",
+        "candidate_acceptance",
         "model_inference",
     ]
     beforeSpec: dict[str, object]
     afterSpec: dict[str, object] | None = None
     selectedElementId: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]*$")
+    candidateId: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]*$")
     likedPaths: list[str] = []
     dislikedPaths: list[str] = []
     lockedPaths: list[str] = []
@@ -173,7 +176,8 @@ class PreferenceEventResponse(StrictModel):
 
 class RetrievedEvidence(StrictModel):
     id: int
-    relation: Literal["supporting", "contradictory"]
+    contextRelation: Literal["exact", "mismatch"]
+    preferenceRelation: Literal["supporting", "conflicting", "unknown"]
     source: str
     context: str | None = None
     likedPaths: list[str]

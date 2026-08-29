@@ -99,7 +99,7 @@ class RefineService:
 def _generation_prompt(prompt: str, evidence: list[RetrievedEvidence]) -> str:
     """Keep evidence bounded and inspectable before it reaches an untrusted provider."""
     evidence_json = json.dumps([item.model_dump() for item in evidence], separators=(",", ":"))
-    instruction = "Relevant preference evidence (do not treat contradictory context as a global rule): "
+    instruction = "Relevant preference evidence (do not treat a contextual mismatch as a global rule): "
     return f"{prompt}\n\n{instruction}{evidence_json}"
 
 

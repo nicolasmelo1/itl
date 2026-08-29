@@ -1,6 +1,6 @@
 # DSPy does not publish pyright stubs; the optional live-provider boundary is isolated here.
 # pyright: reportUnknownArgumentType=false, reportUnknownMemberType=false, reportUnknownVariableType=false
-"""Provider adapter: deterministic fixtures locally, DSPy signatures for models."""
+"""Provider adapter: direct live JSON calls plus optional DSPy experiments."""
 
 import json
 import unicodedata
@@ -13,8 +13,8 @@ from itl_ai.config.settings import Settings
 from itl_ai.refine.models import ParseCritiqueRequest
 
 
-def _dspy_operations() -> tuple[object, type[object], type[object], type[object]]:
-    """Declare the three typed DSPy operations only when a live provider is enabled."""
+def _dspy_operations() -> tuple[object, type[object], type[object]]:
+    """Declare optional DSPy operations without making them the live runtime path."""
     import dspy  # type: ignore[import-untyped]  # DSPy does not publish pyright stubs.
 
     class GenerateSpec(dspy.Signature):  # type: ignore[misc]
@@ -31,14 +31,7 @@ def _dspy_operations() -> tuple[object, type[object], type[object], type[object]
         critique: str = dspy.InputField()
         patch_intent_json: str = dspy.OutputField(desc="A JSON PatchIntent object and nothing else.")
 
-    class GenerateVariants(dspy.Signature):  # type: ignore[misc]
-        """Suggest constrained Button variants as JSON; deterministic validation is mandatory."""
-
-        spec_json: str = dspy.InputField()
-        patch_intent_json: str = dspy.InputField()
-        variants_json: str = dspy.OutputField(desc="A JSON object containing variants and nothing else.")
-
-    return dspy, GenerateSpec, ParseCritique, GenerateVariants
+    return dspy, GenerateSpec, ParseCritique
 
 
 class RefineProvider(Protocol):
@@ -95,10 +88,18 @@ class DeterministicRefineProvider:
         liked: list[str] = []
         disliked: list[str] = []
         terms = (
-            ("cor", "/props/background"), ("color", "/props/background"), ("fundo", "/props/background"),
-            ("espac", "/props/density"), ("spacing", "/props/density"), ("dens", "/props/density"),
-            ("arredond", "/props/radius"), ("radius", "/props/radius"), ("round", "/props/radius"),
-            ("borda", "/props/border"), ("contorno", "/props/border"), ("peso", "/props/fontWeight"),
+            ("cor", "/props/background"),
+            ("color", "/props/background"),
+            ("fundo", "/props/background"),
+            ("espac", "/props/density"),
+            ("spacing", "/props/density"),
+            ("dens", "/props/density"),
+            ("arredond", "/props/radius"),
+            ("radius", "/props/radius"),
+            ("round", "/props/radius"),
+            ("borda", "/props/border"),
+            ("contorno", "/props/border"),
+            ("peso", "/props/fontWeight"),
             ("negrito", "/props/fontWeight"),
         )
         for term, path in terms:
@@ -115,10 +116,7 @@ class DeterministicRefineProvider:
                 )
             ) or (
                 path == "/props/radius"
-                and any(
-                    phrase in normalized
-                    for phrase in ("arredondado demais", "muito arredondado", "too rounded")
-                )
+                and any(phrase in normalized for phrase in ("arredondado demais", "muito arredondado", "too rounded"))
             )
             (disliked if negative else liked).append(path)
         liked = list(dict.fromkeys(liked))
@@ -213,7 +211,7 @@ class DSPyRefineProvider:
     """Thin adapter for a configured DSPy runtime. Output remains untrusted JSON."""
 
     def __init__(self) -> None:
-        dspy, generate_spec, parse_critique, _ = _dspy_operations()
+        dspy, generate_spec, parse_critique = _dspy_operations()
         self._generate_spec = dspy.Predict(generate_spec)  # type: ignore[union-attr]
         self._parse_critique = dspy.Predict(parse_critique)  # type: ignore[union-attr]
 

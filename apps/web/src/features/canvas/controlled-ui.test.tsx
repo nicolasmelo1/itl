@@ -1,10 +1,39 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { fixtureSpec, ControlledRenderer, UI_SPEC_VERSION, validateUISpec } from "@itl/ui-catalog";
-import { afterEach, expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 
 import { ControlledCanvas } from "./controlled-canvas";
 
 afterEach(cleanup);
+
+afterEach(() => vi.unstubAllGlobals());
+
+function installRefineApi() {
+  vi.stubGlobal("fetch", vi.fn(async (input: string) => {
+    if (input.endsWith("/v1/refine/parse-critique")) {
+      return new Response(JSON.stringify({
+        intent: {
+          targetElementId: "continue-button",
+          likedPaths: ["/props/background", "/props/density"],
+          dislikedPaths: ["/props/radius"],
+          lockedPaths: ["/props/background", "/props/density"],
+          explorationPaths: ["/props/radius"],
+          ambiguity: [],
+          rationale: "Keep color and density; explore radius.",
+        },
+      }));
+    }
+    if (input.endsWith("/v1/refine/generate-variants")) {
+      return new Response(JSON.stringify({
+        variants: [
+          { id: "exploit-1", kind: "exploit", spec: fixtureSpec },
+          { id: "adjacent-explore-1", kind: "adjacent_explore", spec: fixtureSpec },
+        ],
+      }));
+    }
+    return new Response(JSON.stringify({ id: 1, createdAt: "2026-01-01T00:00:00Z" }));
+  }));
+}
 
 test("ui.valid_spec_renders_deterministically", () => {
   const first = render(<ControlledRenderer spec={fixtureSpec} />);
@@ -92,19 +121,20 @@ test("ui.storybook_matches_catalog", () => {
   expect(screen.getByTestId("selected-element").textContent).toContain("continue-button");
 });
 
-test("refine.rejection_is_not_a_preference", () => {
+test("refine.rejection_is_not_a_preference", async () => {
+  installRefineApi();
   render(<ControlledCanvas />);
 
   fireEvent.change(screen.getByLabelText("Optional critique"), {
     target: { value: "I like the color and spacing, but it is too rounded." },
   });
   fireEvent.click(screen.getByRole("button", { name: "Review interpretation" }));
-  expect(screen.getByRole("region", { name: "Review refinement intent" })).toBeDefined();
+  expect(await screen.findByRole("region", { name: "Review refinement intent" })).toBeDefined();
   expect(screen.getByText("Keep")).toBeDefined();
   expect(screen.getByText("Explore")).toBeDefined();
 
   fireEvent.click(screen.getByRole("button", { name: "Generate constrained alternatives" }));
-  expect(screen.getByRole("region", { name: "Constrained alternatives" })).toBeDefined();
+  expect(await screen.findByRole("region", { name: "Constrained alternatives" })).toBeDefined();
   expect(screen.getByText("exploit")).toBeDefined();
   expect(screen.getByText("adjacent explore")).toBeDefined();
 

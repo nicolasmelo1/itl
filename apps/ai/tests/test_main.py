@@ -151,3 +151,21 @@ def test_refine_invalid_model_output_preserves_current_spec() -> None:
     assert response.status_code == 422
     assert response.json()["code"] == "invalid_model_output"
     assert button_spec() == original
+
+
+def test_candidate_acceptance_uses_candidate_id_without_overloading_element_id() -> None:
+    response = client.post(
+        "/v1/preference-events",
+        json={
+            "targetElementId": "continue-button",
+            "selectedElementId": "continue-button",
+            "candidateId": "exploit-1",
+            "action": "candidate_acceptance",
+            "source": "candidate_acceptance",
+            "beforeSpec": button_spec(),
+            "afterSpec": button_spec(),
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["id"] == 1
