@@ -5,9 +5,9 @@
 import json
 import unicodedata
 from typing import Protocol
-from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
-from urllib.request import Request, urlopen
+
+import httpx
 
 from itl_ai.config.settings import Settings
 from itl_ai.refine.models import ParseCritiqueRequest
@@ -181,16 +181,16 @@ class OpenAICompatibleRefineProvider:
                 "temperature": 0,
             }
         ).encode()
-        request = Request(
-            f"{self.base_url}/chat/completions",
-            data=body,
-            headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
-            method="POST",
-        )
         try:
-            with urlopen(request, timeout=45) as response:  # nosec B310 - constructor permits absolute HTTPS URLs only.
-                decoded = json.loads(response.read().decode())
-        except (HTTPError, URLError, TimeoutError) as exc:
+            response = httpx.post(
+                f"{self.base_url}/chat/completions",
+                content=body,
+                headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
+                timeout=45,
+            )
+            response.raise_for_status()
+            decoded = response.json()
+        except (httpx.HTTPError, ValueError) as exc:
             raise RuntimeError("The configured model provider could not complete the request.") from exc
         content = decoded.get("choices", [{}])[0].get("message", {}).get("content")
         if not isinstance(content, str):

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "gate": "critique-refine-loop",
-  "implementation_sha256": "a73f4bfbd858286f8a89e4945160fe3683739d8a562a09eb2c676094a4eb774f",
+  "implementation_sha256": "57a07ac5ec58f1371bbf5a53b46d633ff7cab5d47a7818b5b7a35c86af90276d",
   "runs": [
     {
       "scenario": "critique-refine-loop",
