@@ -84,9 +84,15 @@ class PreferenceRepository:
                 """
             )
             columns = {row["name"] for row in connection.execute("PRAGMA table_info(preference_events)")}
-            for column in ("context_json", "evidence_json", "directives_json", "spec_diff_json"):
+            migrations = {
+                "context_json": "ALTER TABLE preference_events ADD COLUMN context_json TEXT",
+                "evidence_json": "ALTER TABLE preference_events ADD COLUMN evidence_json TEXT",
+                "directives_json": "ALTER TABLE preference_events ADD COLUMN directives_json TEXT",
+                "spec_diff_json": "ALTER TABLE preference_events ADD COLUMN spec_diff_json TEXT",
+            }
+            for column, statement in migrations.items():
                 if column not in columns:
-                    connection.execute(f"ALTER TABLE preference_events ADD COLUMN {column} TEXT")
+                    connection.execute(statement)
             connection.execute(
                 "CREATE INDEX IF NOT EXISTS preference_events_retrieval_context "
                 "ON preference_events(component_type, created_at DESC)"
