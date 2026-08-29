@@ -1,7 +1,7 @@
-"""Deterministic Button validation and coherent contextual candidate policies."""
+"""Deterministic Button catalog validation and candidate-patch materialization."""
 
 from copy import deepcopy
-from typing import Literal, cast
+from typing import cast
 
 from pydantic import BaseModel, ValidationError
 
@@ -9,13 +9,13 @@ from itl_ai.refine.models import (
     AttributeDirective,
     BadgeProps,
     ButtonProps,
+    CandidatePatch,
     CardProps,
     InputProps,
     Interpretation,
     ModelIssue,
     PreferDirective,
     SetDirective,
-    Variant,
 )
 
 VISUAL_VALUES: dict[str, tuple[str, ...]] = {
@@ -30,13 +30,6 @@ ORDERED_VISUAL_PATHS = frozenset(
     {"/appearance/size", "/appearance/radius", "/appearance/density", "/appearance/fontWeight"}
 )
 ADJACENT_TO_EXPLOIT_RATIO = 1 / 3
-WILD_RECIPE_CENTROID = {
-    "recipe": "ghost",
-    "size": "regular",
-    "radius": "square",
-    "density": "comfortable",
-    "fontWeight": "semibold",
-}
 
 
 class RefineValidationError(Exception):
@@ -198,114 +191,34 @@ def should_include_adjacent(adjacent_count: int, exploit_count: int) -> bool:
     return adjacent_count < max(1, round((exploit_count + 1) * ADJACENT_TO_EXPLOIT_RATIO))
 
 
-def create_variants(
-    spec: object,
+def apply_and_validate_candidate_patch(
+    original_spec: object,
     target_element_id: str,
     interpretation: Interpretation,
-    include_wild: bool,
-    include_adjacent: bool = True,
-) -> list[Variant]:
-    current = validate_ui_spec(spec)
+    patch: CandidatePatch,
+) -> dict[str, object]:
+    """Apply only visual catalog patches, then enforce every hard directive locally."""
+    current = validate_ui_spec(original_spec)
     original = button_props(current, target_element_id)
     validate_interpretation(interpretation, target_element_id)
-    variants = [
-        _variant(current, original, interpretation, "exploit-1", "exploit", "directive-led refinement", "exploit"),
-    ]
-    if include_adjacent:
-        variants.append(
-            _variant(
-                current,
-                original,
-                interpretation,
-                "adjacent-explore-1",
-                "adjacent_explore",
-                "one nearby coherent visual change",
-                "adjacent",
-            )
-        )
-    if include_wild:
-        variants.append(
-            _variant(
-                current,
-                original,
-                interpretation,
-                "wild-explore-1",
-                "wild_explore",
-                "opt-in ghost recipe centroid",
-                "wild",
-            )
-        )
-    return variants
-
-
-def _variant(
-    current: dict[str, object],
-    original: dict[str, object],
-    interpretation: Interpretation,
-    variant_id: str,
-    kind: Literal["exploit", "adjacent_explore", "wild_explore"],
-    direction: str,
-    policy: Literal["exploit", "adjacent", "wild"],
-) -> Variant:
     candidate = deepcopy(current)
-    props = _element_props(cast(dict[str, object], _elements(candidate)[interpretation.targetElementId]))
-    appearance = _appearance(props)
-    _apply_directives(appearance, interpretation.directives)
-    keep_paths = {directive.path for directive in interpretation.directives if directive.kind == "keep"}
-    directed_paths = {
-        directive.path
-        for directive in interpretation.directives
-        if directive.kind in {"avoid", "prefer", "set", "increase", "decrease"}
-    }
-    if policy == "adjacent":
-        _add_adjacent_change(appearance, keep_paths | directed_paths)
-    if policy == "wild":
-        for token, value in WILD_RECIPE_CENTROID.items():
-            path = f"/appearance/{token}"
-            if path not in keep_paths | directed_paths:
-                appearance[token] = value
-    validated = validate_ui_spec(candidate)
+    candidate_element = _elements(candidate).get(target_element_id)
+    if not isinstance(candidate_element, dict):
+        raise _error("invalid_target", "Select a registered Button before refining.", f"/elements/{target_element_id}")
+    candidate_appearance = _appearance(_element_props(cast(dict[str, object], candidate_element)))
+    changed_paths: set[str] = set()
+    for change in patch.changes:
+        if change.path in changed_paths:
+            raise _error(
+                "duplicate_patch_path", "A candidate patch may change each visual path only once.", change.path
+            )
+        changed_paths.add(change.path)
+        candidate_appearance[change.path.removeprefix("/appearance/")] = change.value
+    candidate = validate_ui_spec(candidate)
     _assert_directives_preserved(
-        _appearance(button_props(validated, interpretation.targetElementId)), _appearance(original), interpretation
+        _appearance(button_props(candidate, target_element_id)), _appearance(original), interpretation
     )
-    return Variant(id=variant_id, kind=kind, direction=direction, spec=validated)
-
-
-def _apply_directives(appearance: dict[str, object], directives: list[AttributeDirective]) -> None:
-    for directive in directives:
-        token = directive.path.removeprefix("/appearance/")
-        current = cast(str, appearance[token])
-        if directive.kind in {"keep", "explore"}:
-            continue
-        if isinstance(directive, (SetDirective, PreferDirective)):
-            appearance[token] = directive.value
-        elif directive.kind == "increase":
-            appearance[token] = _step(token, current, 1, directive.path)
-        elif directive.kind == "decrease":
-            appearance[token] = _step(token, current, -1, directive.path)
-        elif directive.kind == "avoid":
-            appearance[token] = _step(token, current, -1 if token in {"radius", "size"} else 1, directive.path)
-
-
-def _step(token: str, current: str, delta: int, path: str) -> str:
-    values = VISUAL_VALUES[token]
-    index = values.index(current)
-    next_index = index + delta
-    if next_index < 0 or next_index >= len(values):
-        raise _error("unexplorable_path", "The requested visual direction has no adjacent catalog value.", path)
-    return values[next_index]
-
-
-def _add_adjacent_change(appearance: dict[str, object], keep_paths: set[str]) -> None:
-    for token in ("density", "fontWeight", "size", "radius"):
-        path = f"/appearance/{token}"
-        if path in keep_paths:
-            continue
-        current = cast(str, appearance[token])
-        values = VISUAL_VALUES[token]
-        appearance[token] = values[1] if current == values[0] else values[0]
-        return
-    raise _error("unexplorable_path", "Every adjacent visual attribute is explicitly kept.")
+    return candidate
 
 
 def _assert_directives_preserved(
@@ -316,6 +229,18 @@ def _assert_directives_preserved(
         if directive.kind == "keep" and candidate[token] != original[token]:
             raise _error(
                 "lock_broken", "A generated candidate changed an explicitly kept visual attribute.", directive.path
+            )
+        if isinstance(directive, (SetDirective, PreferDirective)) and candidate[token] != directive.value:
+            raise _error(
+                "directive_broken",
+                "A generated candidate did not use the visual value required by the directive.",
+                directive.path,
+            )
+        if directive.kind == "avoid" and candidate[token] == original[token]:
+            raise _error(
+                "directive_broken",
+                "A generated candidate did not move away from the avoided visual value.",
+                directive.path,
             )
         if directive.kind == "decrease" and VISUAL_VALUES[token].index(cast(str, candidate[token])) >= VISUAL_VALUES[
             token

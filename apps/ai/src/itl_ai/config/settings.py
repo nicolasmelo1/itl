@@ -14,6 +14,7 @@ class Settings:
     ollama_model: str
     openai_api_key: str | None
     openai_model: str
+    model_timeout_seconds: float
     preference_database_path: Path
 
     @property
@@ -31,5 +32,6 @@ def load_settings() -> Settings:
         ollama_model=getenv("OLLAMA_MODEL", "gpt-oss:120b-cloud"),
         openai_api_key=getenv("OPENAI_API_KEY"),
         openai_model=getenv("OPENAI_MODEL", "gpt-4.1-mini"),
+        model_timeout_seconds=max(1, float(getenv("LLM_TIMEOUT_SECONDS", "120"))),
         preference_database_path=Path(getenv("PREFERENCE_DATABASE_PATH", "data/preferences.db")),
     )

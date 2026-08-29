@@ -178,11 +178,32 @@ class GenerateVariantsRequest(StrictModel):
     context: DesignContext
 
 
+class CandidateChange(StrictModel):
+    """One catalog-scoped visual mutation proposed by an untrusted model."""
+
+    path: VisualPath
+    value: str = Field(min_length=1)
+
+
+class CandidatePatch(StrictModel):
+    """A reviewable proposal; the engine, never the model, applies it to the current spec."""
+
+    changes: list[CandidateChange] = Field(min_length=1, max_length=5)
+    rationale: str = Field(min_length=1, max_length=1_000)
+
+
 class Variant(StrictModel):
     id: str
     kind: Literal["exploit", "adjacent_explore", "wild_explore"]
     direction: str
     spec: dict[str, object]
+
+
+class CandidateProposal(StrictModel):
+    """A policy-labelled patch returned by GenerateCandidatePatches."""
+
+    kind: Literal["exploit", "adjacent_explore", "wild_explore"]
+    patch: CandidatePatch
 
 
 class GenerateVariantsResponse(StrictModel):
