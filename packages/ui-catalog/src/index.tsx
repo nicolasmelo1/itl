@@ -6,18 +6,42 @@ import { z } from "zod";
 
 export const UI_SPEC_VERSION = "itl.ui/v1";
 
+export const buttonAppearanceValues = {
+  recipe: ["primary", "secondary", "outline", "ghost"],
+  size: ["compact", "regular"],
+  radius: ["square", "soft", "pill"],
+  density: ["compact", "comfortable"],
+  fontWeight: ["regular", "semibold"],
+} as const;
+
+export const buttonCatalogManifest = {
+  version: "itl.catalog/button.v1",
+  component: "Button",
+  semantic: {
+    role: ["primary-action", "secondary-action"],
+    state: ["default", "disabled", "loading"],
+  },
+  appearance: buttonAppearanceValues,
+} as const;
+
+const buttonContentSchema = z.object({ label: z.string().min(1) }).strict();
+const buttonSemanticSchema = z.object({
+  role: z.enum(["primary-action", "secondary-action"]),
+  state: z.enum(["default", "disabled", "loading"]),
+}).strict();
+const buttonAppearanceSchema = z.object({
+  recipe: z.enum(buttonAppearanceValues.recipe),
+  size: z.enum(buttonAppearanceValues.size),
+  radius: z.enum(buttonAppearanceValues.radius),
+  density: z.enum(buttonAppearanceValues.density),
+  fontWeight: z.enum(buttonAppearanceValues.fontWeight),
+}).strict();
+
 const buttonPropsSchema = z
   .object({
-    label: z.string().min(1),
-    variant: z.enum(["solid", "subtle", "outline"]),
-    size: z.enum(["compact", "regular"]),
-    radius: z.enum(["square", "soft", "pill"]),
-    density: z.enum(["compact", "comfortable"]),
-    background: z.enum(["accent", "surface", "transparent"]),
-    foreground: z.enum(["light", "dark"]),
-    border: z.enum(["none", "subtle", "strong"]),
-    fontWeight: z.enum(["regular", "semibold"]),
-    state: z.enum(["default", "disabled", "loading"]),
+    content: buttonContentSchema,
+    semantic: buttonSemanticSchema,
+    appearance: buttonAppearanceSchema,
   })
   .strict();
 
@@ -76,7 +100,7 @@ type CatalogMetadata = {
 export const componentMetadata: Record<ComponentType, CatalogMetadata> = {
   Button: {
     level: "atom",
-    editablePropPaths: ["/label", "/variant", "/size", "/radius", "/density", "/background", "/foreground", "/border", "/fontWeight", "/state"],
+    editablePropPaths: ["/appearance/recipe", "/appearance/size", "/appearance/radius", "/appearance/density", "/appearance/fontWeight"],
     allowedChildTypes: [],
   },
   Input: {
@@ -212,8 +236,18 @@ export const fixtureSpec: UISpec = {
     "name-input": { type: "Input", props: { label: "Name", placeholder: "Ada Lovelace", value: "", tone: "quiet", state: "default" }, children: [] },
     "continue-button": {
       type: "Button",
-      props: { label: "Continue", variant: "solid", size: "regular", radius: "soft", density: "comfortable", background: "accent", foreground: "light", border: "none", fontWeight: "semibold", state: "default" },
+      props: {
+        content: { label: "Continue" },
+        semantic: { role: "primary-action", state: "default" },
+        appearance: { recipe: "primary", size: "regular", radius: "soft", density: "comfortable", fontWeight: "semibold" },
+      },
       children: [],
     },
   },
+};
+
+export const buttonFixtureSpec: UISpec = {
+  version: UI_SPEC_VERSION,
+  root: "continue-button",
+  elements: { "continue-button": fixtureSpec.elements["continue-button"] },
 };

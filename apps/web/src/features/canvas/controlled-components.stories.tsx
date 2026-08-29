@@ -11,44 +11,37 @@ export default buttonMeta;
 type ButtonStory = StoryObj<typeof buttonMeta>;
 
 const baseButton: ButtonProps = {
-  background: "accent",
-  border: "none",
-  density: "comfortable",
-  fontWeight: "semibold",
-  foreground: "light",
-  label: "Continue",
-  radius: "soft",
-  size: "regular",
-  state: "default",
-  variant: "solid",
+  content: { label: "Continue" },
+  semantic: { role: "primary-action", state: "default" },
+  appearance: { recipe: "primary", density: "comfortable", fontWeight: "semibold", radius: "soft", size: "regular" },
 };
 
 export const TechnicalSquare: ButtonStory = {
-  args: { ...baseButton, radius: "square" },
+  args: { ...baseButton, appearance: { ...baseButton.appearance, radius: "square" } },
 };
 
 export const Subtle: ButtonStory = {
-  args: { ...baseButton, background: "surface", border: "none", foreground: "dark", variant: "subtle" },
+  args: { ...baseButton, appearance: { ...baseButton.appearance, recipe: "secondary" } },
 };
 
 export const Outline: ButtonStory = {
-  args: { ...baseButton, background: "transparent", border: "strong", foreground: "dark", variant: "outline" },
+  args: { ...baseButton, appearance: { ...baseButton.appearance, recipe: "outline" } },
 };
 
 export const Compact: ButtonStory = {
-  args: { ...baseButton, density: "compact", size: "compact" },
+  args: { ...baseButton, appearance: { ...baseButton.appearance, density: "compact", size: "compact" } },
 };
 
 export const Disabled: ButtonStory = {
-  args: { ...baseButton, state: "disabled" },
+  args: { ...baseButton, semantic: { ...baseButton.semantic, state: "disabled" } },
 };
 
 export const Loading: ButtonStory = {
-  args: { ...baseButton, state: "loading" },
+  args: { ...baseButton, semantic: { ...baseButton.semantic, state: "loading" } },
 };
 
 export const FocusVisible: ButtonStory = {
-  args: { ...baseButton, label: "Tab to inspect focus" },
+  args: { ...baseButton, content: { label: "Tab to inspect focus" } },
   play: async ({ canvas }) => {
     canvas.getByRole("button").focus();
   },

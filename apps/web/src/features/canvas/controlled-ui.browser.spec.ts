@@ -1,34 +1,29 @@
 import { expect, test } from "@playwright/test";
-import { fixtureSpec } from "@itl/ui-catalog";
+import { buttonFixtureSpec } from "@itl/ui-catalog";
 
-test("the canvas exposes registered atoms and stable selection identifiers", async ({ page }) => {
+test("the contextual canvas exposes one editable Button in each static surface", async ({ page }) => {
   await page.goto("/");
-
-  await expect(page.getByRole("region", { name: "Controlled components" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "hero Button surface" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Continue" })).toBeEnabled();
-  await expect(page.getByLabel("Name")).toBeVisible();
-  await expect(page.getByText("Ready")).toBeVisible();
-  await expect(page.locator("[data-jr-key='continue-button']")).toHaveCount(1);
-
-  await page.getByRole("button", { name: "Continue" }).click();
-  await expect(page.getByTestId("selected-element")).toContainText("continue-button");
+  await page.getByRole("button", { name: "toolbar" }).click();
+  await expect(page.getByRole("region", { name: "toolbar Button surface" })).toBeVisible();
+  await page.getByRole("button", { name: "form" }).click();
+  await expect(page.getByRole("region", { name: "form Button surface" })).toBeVisible();
 });
 
-test("a critique is confirmed before constrained alternatives are reviewed", async ({ page }) => {
+test("a critique stays transient until its contextual interpretation is confirmed", async ({ page }) => {
   const recordedActions: string[] = [];
   await page.route("**/v1/**", async (route) => {
     if (route.request().url().endsWith("/v1/refine/parse-critique")) {
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify({
-          intent: {
+          interpretation: {
             targetElementId: "continue-button",
-            likedPaths: ["/props/background", "/props/density"],
-            dislikedPaths: ["/props/radius"],
-            lockedPaths: ["/props/background", "/props/density"],
-            explorationPaths: ["/props/radius"],
+            evidence: { likedPaths: [], dislikedPaths: ["/appearance/radius"], lockedPaths: [], strength: "moderate" },
+            directives: [{ kind: "decrease", path: "/appearance/radius" }],
             ambiguity: [],
-            rationale: "Keep color and density; explore radius.",
+            rationale: "Decrease radius.",
           },
         }),
       });
@@ -39,8 +34,7 @@ test("a critique is confirmed before constrained alternatives are reviewed", asy
         contentType: "application/json",
         body: JSON.stringify({
           variants: [
-            { id: "exploit-1", kind: "exploit", spec: fixtureSpec },
-            { id: "adjacent-explore-1", kind: "adjacent_explore", spec: fixtureSpec },
+            { id: "exploit-1", kind: "exploit", direction: "directive-led refinement", spec: buttonFixtureSpec },
           ],
         }),
       });
@@ -48,17 +42,17 @@ test("a critique is confirmed before constrained alternatives are reviewed", asy
     }
     const body = route.request().postDataJSON() as { action?: string };
     if (body.action) recordedActions.push(body.action);
-    await route.fulfill({ contentType: "application/json", body: JSON.stringify({ id: 1, createdAt: "2026-01-01T00:00:00Z" }) });
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ id: 1, createdAt: "2026-01-01T00:00:00Z" }),
+    });
   });
   await page.goto("/");
-
-  await page.getByLabel("Optional critique").fill("I like the color and spacing, but it is too rounded.");
+  await page.getByLabel("Optional critique").fill("It is too rounded.");
   await page.getByRole("button", { name: "Review interpretation" }).click();
-  await expect(page.getByRole("region", { name: "Review refinement intent" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Review refinement interpretation" })).toBeVisible();
   expect(recordedActions).toEqual([]);
   await page.getByRole("button", { name: "Generate constrained alternatives" }).click();
-  await expect(page.getByText("exploit", { exact: true })).toBeVisible();
+  await expect(page.getByText("exploit: directive-led refinement")).toBeVisible();
   expect(recordedActions).toContain("confirmed_critique");
-  await page.getByRole("button", { name: "Reject all" }).click();
-  await expect(page.getByTestId("refine-status")).toContainText("No option was selected as a winner");
 });

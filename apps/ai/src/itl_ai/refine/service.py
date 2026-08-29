@@ -10,21 +10,24 @@ from itl_ai.memory.repository import PreferenceRepository
 from itl_ai.refine.catalog import (
     RefineValidationError,
     create_variants,
-    validate_intent,
+    should_include_adjacent,
+    validate_interpretation,
     validate_ui_spec,
 )
 from itl_ai.refine.models import (
+    DesignContext,
     GenerateSpecRequest,
     GenerateSpecResponse,
     GenerateVariantsRequest,
     GenerateVariantsResponse,
+    Interpretation,
     MemoryResponse,
     ModelIssue,
     ParseCritiqueRequest,
     ParseCritiqueResponse,
-    PatchIntent,
     PreferenceEventRequest,
     PreferenceEventResponse,
+    PreferenceEvidence,
     RetrievedEvidence,
 )
 from itl_ai.refine.providers import DeterministicRefineProvider, RefineProvider
@@ -36,7 +39,7 @@ class RefineService:
         self.provider = provider or DeterministicRefineProvider()
 
     def generate_spec(self, request: GenerateSpecRequest) -> GenerateSpecResponse:
-        evidence = self.repository.retrieve("Button", request.context, set())
+        evidence = self.repository.retrieve("Button", request.context, PreferenceEvidence())
         spec = _decode_json(self.provider.generate_spec(_generation_prompt(request.prompt, evidence)))
         output_id = _output_id("spec")
         evidence_ids = [item.id for item in evidence]
@@ -47,31 +50,34 @@ class RefineService:
         validate_ui_spec(request.spec)
         raw = _decode_json(self.provider.parse_critique(request))
         try:
-            intent = PatchIntent.model_validate(raw)
+            interpretation = Interpretation.model_validate(raw)
         except ValidationError as exc:
             raise RefineValidationError(
                 "invalid_model_output",
                 "The refinement response could not be safely interpreted. The current spec was retained.",
                 [
                     ModelIssue(
-                        code="invalid_patch_intent",
-                        message="The provider did not return the required patch intent fields.",
+                        code="invalid_interpretation",
+                        message="The provider did not return the required contextual interpretation fields.",
                     )
                 ],
             ) from exc
-        validate_intent(intent, request.targetElementId)
-        return ParseCritiqueResponse(intent=intent)
+        validate_interpretation(interpretation, request.targetElementId)
+        return ParseCritiqueResponse(interpretation=interpretation)
 
     def generate_variants(self, request: GenerateVariantsRequest) -> GenerateVariantsResponse:
-        validate_intent(request.intent, request.targetElementId)
-        evidence = self.repository.retrieve("Button", request.context, set(request.intent.explorationPaths))
+        validate_interpretation(request.interpretation, request.targetElementId)
+        evidence = self.repository.retrieve("Button", request.context, request.interpretation.evidence)
         counts = self.repository.policy_counts(request.sessionId)
         adjacent_count = counts.get("adjacent_explore", 0)
         exploit_count = counts.get("exploit", 0)
-        # One adjacent option is allowed for roughly every three exploitation proposals.
-        include_adjacent = adjacent_count < max(1, (exploit_count + 1) // 3)
+        include_adjacent = should_include_adjacent(adjacent_count, exploit_count)
         variants = create_variants(
-            request.spec, request.targetElementId, request.intent, request.includeWild, include_adjacent
+            request.spec,
+            request.targetElementId,
+            request.interpretation,
+            request.includeWild,
+            include_adjacent,
         )
         output_id = _output_id("variants")
         evidence_ids = [item.id for item in evidence]
@@ -92,8 +98,8 @@ class RefineService:
         event_id, created_at = self.repository.add_event(request)
         return PreferenceEventResponse(id=event_id, createdAt=created_at)
 
-    def preference_memory(self, context: str | None, paths: set[str]) -> MemoryResponse:
-        return MemoryResponse(evidence=self.repository.retrieve("Button", context, paths))
+    def preference_memory(self, context: DesignContext, evidence: PreferenceEvidence) -> MemoryResponse:
+        return MemoryResponse(evidence=self.repository.retrieve("Button", context, evidence))
 
 
 def _generation_prompt(prompt: str, evidence: list[RetrievedEvidence]) -> str:

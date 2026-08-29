@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "gate": "button-contextual-lab",
+  "implementation_sha256": "2a7482569af3b65a4284fa1d1227ecda3f3eaf829ed1f27a5ed0ef0c278bdda4",
+  "runs": [
+    {
+      "scenario": "button-contextual-lab",
+      "status": "passed",
+      "actor": "Codex",
+      "report": "evidence/reports/button-contextual-lab.json",
+      "report_sha256": "566614ebad388fa5386acc0956e842d15e75f04a74442b08cd6d7b9bda07472b",
+      "required_assertions": [
+        "button.directives_preserve_direction",
+        "button.recipes_are_coherent",
+        "button.taste_space_is_visual_only",
+        "button.web_uses_api_and_typed_context",
+        "button.retrieval_is_contextual"
+      ]
+    }
+  ]
+}

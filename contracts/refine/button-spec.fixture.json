@@ -5,16 +5,15 @@
     "continue-button": {
       "type": "Button",
       "props": {
-        "label": "Continue",
-        "variant": "solid",
-        "size": "regular",
-        "radius": "soft",
-        "density": "comfortable",
-        "background": "accent",
-        "foreground": "light",
-        "border": "none",
-        "fontWeight": "semibold",
-        "state": "default"
+        "content": { "label": "Continue" },
+        "semantic": { "role": "primary-action", "state": "default" },
+        "appearance": {
+          "recipe": "primary",
+          "size": "regular",
+          "radius": "soft",
+          "density": "comfortable",
+          "fontWeight": "semibold"
+        }
       },
       "children": []
     }

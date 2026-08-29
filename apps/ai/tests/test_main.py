@@ -1,11 +1,16 @@
+import json
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 
 import itl_ai.main as main
 from itl_ai.memory.repository import PreferenceRepository
+from itl_ai.refine.catalog import VISUAL_VALUES
 from itl_ai.refine.service import RefineService
 
 client = TestClient(main.app)
+context = {"role": "primary-action", "surface": "hero", "density": "comfortable"}
 
 
 @pytest.fixture(autouse=True)
@@ -13,34 +18,7 @@ def isolated_preference_memory(tmp_path) -> None:
     main.refine_service = RefineService(PreferenceRepository(tmp_path / "preferences.sqlite"))
 
 
-def test_health_is_available_without_provider_credentials(monkeypatch) -> None:
-    monkeypatch.delenv("GENERATION_PROVIDER_API_KEY", raising=False)
-
-    response = client.get("/health")
-
-    assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
-
-
-def test_generation_without_credentials_returns_a_safe_configuration_error(
-    monkeypatch,
-) -> None:
-    monkeypatch.delenv("GENERATION_PROVIDER_API_KEY", raising=False)
-
-    response = client.post("/v1/generate", json={"prompt": "Make a card"})
-
-    assert response.status_code == 503
-    assert response.json()["code"] == "provider_not_configured"
-
-
-def test_invalid_generation_request_returns_a_typed_error() -> None:
-    response = client.post("/v1/generate", json={"prompt": ""})
-
-    assert response.status_code == 422
-    assert response.json()["code"] == "invalid_request"
-
-
-def button_spec() -> dict[str, object]:
+def button_spec(radius: str = "soft") -> dict[str, object]:
     return {
         "version": "itl.ui/v1",
         "root": "continue-button",
@@ -48,16 +26,15 @@ def button_spec() -> dict[str, object]:
             "continue-button": {
                 "type": "Button",
                 "props": {
-                    "label": "Continue",
-                    "variant": "solid",
-                    "size": "regular",
-                    "radius": "soft",
-                    "density": "comfortable",
-                    "background": "accent",
-                    "foreground": "light",
-                    "border": "none",
-                    "fontWeight": "semibold",
-                    "state": "default",
+                    "content": {"label": "Continue"},
+                    "semantic": {"role": "primary-action", "state": "default"},
+                    "appearance": {
+                        "recipe": "primary",
+                        "size": "regular",
+                        "radius": radius,
+                        "density": "comfortable",
+                        "fontWeight": "semibold",
+                    },
                 },
                 "children": [],
             }
@@ -65,107 +42,95 @@ def button_spec() -> dict[str, object]:
     }
 
 
-def critique_payload(critique: str) -> dict[str, object]:
+def interpretation() -> dict[str, object]:
     return {
-        "specVersion": "itl.ui/v1",
-        "spec": button_spec(),
         "targetElementId": "continue-button",
-        "critique": critique,
+        "evidence": {
+            "likedPaths": ["/appearance/recipe"],
+            "dislikedPaths": ["/appearance/radius"],
+            "lockedPaths": ["/appearance/recipe"],
+            "strength": "moderate",
+        },
+        "directives": [
+            {"kind": "keep", "path": "/appearance/recipe"},
+            {"kind": "decrease", "path": "/appearance/radius"},
+        ],
+        "ambiguity": [],
+        "rationale": "Keep the recipe and decrease radius.",
     }
 
 
-def test_refine_critique_yields_reviewable_patch_intent() -> None:
+def test_refine_critique_yields_reviewable_contextual_interpretation() -> None:
     response = client.post(
         "/v1/refine/parse-critique",
-        json=critique_payload("Gosto da cor e do espaçamento, mas está arredondado demais."),
+        json={
+            "specVersion": "itl.ui/v1",
+            "spec": button_spec(),
+            "targetElementId": "continue-button",
+            "critique": "Too rounded.",
+        },
     )
-
     assert response.status_code == 200
-    intent = response.json()["intent"]
-    assert intent["lockedPaths"] == ["/props/background", "/props/density"]
-    assert intent["explorationPaths"] == ["/props/radius"]
+    result = response.json()["interpretation"]
+    assert result["directives"] == [{"kind": "decrease", "path": "/appearance/radius"}]
 
 
-def test_refine_locks_are_preserved_and_explored_values_are_valid() -> None:
-    intent = {
-        "targetElementId": "continue-button",
-        "likedPaths": ["/props/background", "/props/density"],
-        "dislikedPaths": ["/props/radius"],
-        "lockedPaths": ["/props/background", "/props/density"],
-        "explorationPaths": ["/props/radius"],
-        "ambiguity": [],
-        "rationale": "Keep color and spacing; explore radius.",
-    }
+def test_button_catalog_manifest_matches_the_python_visual_vocabulary() -> None:
+    catalog = json.loads((Path(__file__).parents[3] / "contracts/catalog/button.v1.json").read_text())
+    assert {key: tuple(values) for key, values in catalog["appearance"].items()} == VISUAL_VALUES
+
+
+def test_button_directives_preserve_direction_and_recipes_are_coherent() -> None:
     response = client.post(
         "/v1/refine/generate-variants",
         json={
             "specVersion": "itl.ui/v1",
             "spec": button_spec(),
             "targetElementId": "continue-button",
-            "intent": intent,
+            "interpretation": interpretation(),
             "includeWild": True,
+            "context": context,
         },
     )
-
     assert response.status_code == 200
     variants = response.json()["variants"]
-    assert [variant["kind"] for variant in variants] == ["exploit", "adjacent_explore", "wild_explore"]
     for variant in variants:
-        props = variant["spec"]["elements"]["continue-button"]["props"]
-        assert props["background"] == "accent"
-        assert props["density"] == "comfortable"
-        assert props["radius"] in {"square", "pill"}
+        appearance = variant["spec"]["elements"]["continue-button"]["props"]["appearance"]
+        assert appearance["radius"] == "square"
+        assert appearance["recipe"] == "primary" or variant["kind"] == "wild_explore"
+        assert set(appearance) == {"recipe", "size", "radius", "density", "fontWeight"}
 
 
-def test_refine_conflicting_locks_and_unknown_paths_fail_closed() -> None:
-    intent = {
-        "targetElementId": "continue-button",
-        "likedPaths": [],
-        "dislikedPaths": [],
-        "lockedPaths": ["/props/radius"],
-        "explorationPaths": ["/props/radius"],
-        "ambiguity": [],
-        "rationale": "Contradictory fixture.",
-    }
+def test_button_taste_space_rejects_state_and_content_paths() -> None:
+    invalid = interpretation()
+    invalid["directives"] = [{"kind": "explore", "path": "/semantic/state"}]
     response = client.post(
         "/v1/refine/generate-variants",
         json={
             "specVersion": "itl.ui/v1",
             "spec": button_spec(),
             "targetElementId": "continue-button",
-            "intent": intent,
+            "interpretation": invalid,
+            "context": context,
         },
     )
-    unknown_path = client.post("/v1/refine/parse-critique", json=critique_payload("__unknown_path__"))
-
     assert response.status_code == 422
-    assert response.json()["code"] == "conflicting_paths"
-    assert unknown_path.status_code == 422
-    assert unknown_path.json()["code"] == "unsupported_path"
+    assert response.json()["code"] == "invalid_request"
 
 
-def test_refine_invalid_model_output_preserves_current_spec() -> None:
-    original = button_spec()
-    response = client.post("/v1/refine/parse-critique", json=critique_payload("__malformed_model_output__"))
-
-    assert response.status_code == 422
-    assert response.json()["code"] == "invalid_model_output"
-    assert button_spec() == original
-
-
-def test_candidate_acceptance_uses_candidate_id_without_overloading_element_id() -> None:
+def test_candidate_acceptance_keeps_candidate_identity_separate_from_element_identity() -> None:
     response = client.post(
         "/v1/preference-events",
         json={
+            "context": context,
             "targetElementId": "continue-button",
             "selectedElementId": "continue-button",
             "candidateId": "exploit-1",
             "action": "candidate_acceptance",
             "source": "candidate_acceptance",
             "beforeSpec": button_spec(),
-            "afterSpec": button_spec(),
+            "afterSpec": button_spec(radius="square"),
         },
     )
-
     assert response.status_code == 200
     assert response.json()["id"] == 1

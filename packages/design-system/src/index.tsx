@@ -4,16 +4,15 @@ import styles from "./components.module.css";
 import "./tokens.module.css";
 
 export type ButtonProps = {
-  label: string;
-  variant: "solid" | "subtle" | "outline";
-  size: "compact" | "regular";
-  radius: "square" | "soft" | "pill";
-  density: "compact" | "comfortable";
-  background: "accent" | "surface" | "transparent";
-  foreground: "light" | "dark";
-  border: "none" | "subtle" | "strong";
-  fontWeight: "regular" | "semibold";
-  state: "default" | "disabled" | "loading";
+  content: { label: string };
+  semantic: { role: "primary-action" | "secondary-action"; state: "default" | "disabled" | "loading" };
+  appearance: {
+    recipe: "primary" | "secondary" | "outline" | "ghost";
+    size: "compact" | "regular";
+    radius: "square" | "soft" | "pill";
+    density: "compact" | "comfortable";
+    fontWeight: "regular" | "semibold";
+  };
 };
 
 export type InputProps = {
@@ -36,25 +35,23 @@ export type CardProps = {
 };
 
 export function Button(props: ButtonProps) {
-  const isLoading = props.state === "loading";
-  const isDisabled = props.state !== "default";
+  const isLoading = props.semantic.state === "loading";
+  const isDisabled = props.semantic.state !== "default";
 
   return (
     <button
       aria-busy={isLoading || undefined}
       className={styles.button}
-      data-background={props.background}
-      data-border={props.border}
-      data-density={props.density}
-      data-font-weight={props.fontWeight}
-      data-foreground={props.foreground}
-      data-radius={props.radius}
-      data-size={props.size}
-      data-variant={props.variant}
+      data-density={props.appearance.density}
+      data-font-weight={props.appearance.fontWeight}
+      data-radius={props.appearance.radius}
+      data-recipe={props.appearance.recipe}
+      data-role={props.semantic.role}
+      data-size={props.appearance.size}
       disabled={isDisabled}
       type="button"
     >
-      {isLoading ? "Loading…" : props.label}
+      {isLoading ? "Loading…" : props.content.label}
     </button>
   );
 }

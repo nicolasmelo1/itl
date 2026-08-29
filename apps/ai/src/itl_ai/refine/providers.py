@@ -12,6 +12,20 @@ import httpx
 from itl_ai.config.settings import Settings
 from itl_ai.refine.models import ParseCritiqueRequest
 
+CRITIQUE_TERMS = (
+    ("cor", "/appearance/recipe"),
+    ("color", "/appearance/recipe"),
+    ("fundo", "/appearance/recipe"),
+    ("espac", "/appearance/density"),
+    ("spacing", "/appearance/density"),
+    ("dens", "/appearance/density"),
+    ("arredond", "/appearance/radius"),
+    ("radius", "/appearance/radius"),
+    ("round", "/appearance/radius"),
+    ("peso", "/appearance/fontWeight"),
+    ("negrito", "/appearance/fontWeight"),
+)
+
 
 def _dspy_operations() -> tuple[object, type[object], type[object]]:
     """Declare optional DSPy operations without making them the live runtime path."""
@@ -52,16 +66,15 @@ class DeterministicRefineProvider:
                     "continue-button": {
                         "type": "Button",
                         "props": {
-                            "label": "Continue",
-                            "variant": "solid",
-                            "size": "regular",
-                            "radius": "soft",
-                            "density": "comfortable",
-                            "background": "accent",
-                            "foreground": "light",
-                            "border": "none",
-                            "fontWeight": "semibold",
-                            "state": "default",
+                            "content": {"label": "Continue"},
+                            "semantic": {"role": "primary-action", "state": "default"},
+                            "appearance": {
+                                "recipe": "primary",
+                                "size": "regular",
+                                "radius": "soft",
+                                "density": "comfortable",
+                                "fontWeight": "semibold",
+                            },
                         },
                         "children": [],
                     }
@@ -70,72 +83,83 @@ class DeterministicRefineProvider:
         )
 
     def parse_critique(self, request: ParseCritiqueRequest) -> str:
-        normalized = unicodedata.normalize("NFKD", request.critique).encode("ascii", "ignore").decode().lower()
+        normalized = _normalise_critique(request.critique)
         if "__malformed_model_output__" in normalized:
             return "this is not JSON"
         if "__unknown_path__" in normalized:
-            return json.dumps(
-                {
-                    "targetElementId": request.targetElementId,
-                    "likedPaths": ["/props/magic"],
-                    "dislikedPaths": [],
-                    "lockedPaths": ["/props/magic"],
-                    "explorationPaths": ["/props/radius"],
-                    "ambiguity": [],
-                    "rationale": "Fixture invalid path.",
-                }
-            )
-        liked: list[str] = []
-        disliked: list[str] = []
-        terms = (
-            ("cor", "/props/background"),
-            ("color", "/props/background"),
-            ("fundo", "/props/background"),
-            ("espac", "/props/density"),
-            ("spacing", "/props/density"),
-            ("dens", "/props/density"),
-            ("arredond", "/props/radius"),
-            ("radius", "/props/radius"),
-            ("round", "/props/radius"),
-            ("borda", "/props/border"),
-            ("contorno", "/props/border"),
-            ("peso", "/props/fontWeight"),
-            ("negrito", "/props/fontWeight"),
-        )
-        for term, path in terms:
-            if term not in normalized:
-                continue
-            negative = any(
-                phrase in normalized
-                for phrase in (
-                    f"nao gosto da {term}",
-                    f"nao gosto do {term}",
-                    f"menos {term}",
-                    f"{term} demais",
-                    f"mudar {term}",
-                )
-            ) or (
-                path == "/props/radius"
-                and any(phrase in normalized for phrase in ("arredondado demais", "muito arredondado", "too rounded"))
-            )
-            (disliked if negative else liked).append(path)
-        liked = list(dict.fromkeys(liked))
-        disliked = list(dict.fromkeys(disliked))
-        ambiguity = [] if liked or disliked else ["No supported Button token was identified. Choose tokens manually."]
-        return json.dumps(
-            {
-                "targetElementId": request.targetElementId,
+            return _invalid_path_fixture(request.targetElementId)
+        return _interpretation_json(request.targetElementId, normalized)
+
+
+def _normalise_critique(critique: str) -> str:
+    return unicodedata.normalize("NFKD", critique).encode("ascii", "ignore").decode().lower()
+
+
+def _invalid_path_fixture(target_element_id: str) -> str:
+    return json.dumps(
+        {
+            "targetElementId": target_element_id,
+            "evidence": {"likedPaths": ["/appearance/magic"], "dislikedPaths": [], "lockedPaths": []},
+            "directives": [{"kind": "decrease", "path": "/appearance/radius"}],
+            "ambiguity": [],
+            "rationale": "Fixture invalid path.",
+        }
+    )
+
+
+def _interpretation_json(target_element_id: str, critique: str) -> str:
+    liked, disliked = _evidence_paths(critique)
+    directives = [
+        *[{"kind": "keep", "path": path} for path in liked],
+        *[_directive_for_dislike(path) for path in disliked],
+    ]
+    ambiguity = [] if liked or disliked else ["No supported Button token was identified. Choose tokens manually."]
+    return json.dumps(
+        {
+            "targetElementId": target_element_id,
+            "evidence": {
                 "likedPaths": liked,
                 "dislikedPaths": disliked,
                 "lockedPaths": liked,
-                "explorationPaths": disliked,
-                "ambiguity": ambiguity,
-                "rationale": (
-                    "Explicitly liked tokens are proposed as locks; "
-                    "disliked tokens are proposed for bounded exploration."
-                ),
-            }
+                "strength": "moderate",
+            },
+            "directives": directives,
+            "ambiguity": ambiguity,
+            "rationale": (
+                "Explicitly liked visual attributes are kept; directional critique becomes a visual directive."
+            ),
+        }
+    )
+
+
+def _evidence_paths(critique: str) -> tuple[list[str], list[str]]:
+    liked: list[str] = []
+    disliked: list[str] = []
+    for term, path in CRITIQUE_TERMS:
+        if term in critique:
+            (disliked if _is_negative(term, path, critique) else liked).append(path)
+    return list(dict.fromkeys(liked)), list(dict.fromkeys(disliked))
+
+
+def _is_negative(term: str, path: str, critique: str) -> bool:
+    ordinary_negative = any(
+        phrase in critique
+        for phrase in (
+            f"nao gosto da {term}",
+            f"nao gosto do {term}",
+            f"menos {term}",
+            f"{term} demais",
+            f"mudar {term}",
         )
+    )
+    radius_negative = path == "/appearance/radius" and any(
+        phrase in critique for phrase in ("arredondado demais", "muito arredondado", "too rounded")
+    )
+    return ordinary_negative or radius_negative
+
+
+def _directive_for_dislike(path: str) -> dict[str, str]:
+    return {"kind": "decrease" if path == "/appearance/radius" else "explore", "path": path}
 
 
 class OpenAICompatibleRefineProvider:
@@ -157,7 +181,7 @@ class OpenAICompatibleRefineProvider:
 
     def parse_critique(self, request: ParseCritiqueRequest) -> str:
         return self._complete(
-            "Return exactly one JSON PatchIntent. Only use documented /props Button paths; no markdown.",
+            "Return exactly one JSON Interpretation. Only use documented /appearance Button paths; no markdown.",
             json.dumps(
                 {
                     "spec": request.spec,

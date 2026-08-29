@@ -15,8 +15,38 @@
 }
 
 .currentSpec {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #d8dbe2;
+  display: flex;
+  gap: 1rem;
   max-width: 38rem;
+  padding: 1.25rem;
 }
+
+.contextPicker {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.contextPicker button {
+  background: #fff;
+  border: 1px solid #b8bdc8;
+  border-radius: 999px;
+  cursor: pointer;
+  padding: 0.35rem 0.7rem;
+}
+
+.contextPicker button[aria-pressed="true"] { background: #242832; color: #fff; }
+.toolbar { justify-content: space-between; max-width: 48rem; }
+.hero { align-items: end; justify-content: space-between; max-width: 48rem; }
+.hero h2, .hero p { margin: 0; }
+.hero p { color: #5f6470; font-size: 0.875rem; margin-bottom: 0.35rem; }
+.form { align-items: end; justify-content: space-between; max-width: 34rem; }
+.form label { display: grid; font-size: 0.875rem; gap: 0.35rem; }
+.form input { border: 1px solid #b8bdc8; border-radius: 0.4rem; font: inherit; min-height: 2.25rem; padding: 0 0.6rem; }
 
 .selection {
   color: #5f6470;

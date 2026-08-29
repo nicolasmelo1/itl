@@ -1,4 +1,4 @@
-"""SQLite repository boundary for local, append-only preference evidence."""
+"""SQLite boundary for append-only, contextual Button preference evidence."""
 
 import json
 import sqlite3
@@ -6,8 +6,9 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Literal, cast
 
-from itl_ai.refine.models import PreferenceEventRequest, RetrievedEvidence
+from itl_ai.refine.models import DesignContext, PreferenceEventRequest, PreferenceEvidence, RetrievedEvidence, SpecDiff
 
 SOURCE_CONFIDENCE = {
     "manual_edit": 60,
@@ -18,10 +19,11 @@ SOURCE_CONFIDENCE = {
     "candidate_acceptance": 25,
     "model_inference": 10,
 }
+STRENGTH_SCORE = {"weak": 10, "moderate": 30, "strong": 50}
 
 
 class PreferenceRepository:
-    """Only this class issues SQL for preference events and audit records."""
+    """Only this class issues SQL for preference events and their audit records."""
 
     def __init__(self, database_path: Path) -> None:
         self.database_path = database_path
@@ -63,15 +65,13 @@ class PreferenceRepository:
                     after_snapshot_id INTEGER REFERENCES spec_snapshots(id),
                     selected_element_id TEXT,
                     candidate_id TEXT,
-                    liked_paths_json TEXT NOT NULL,
-                    disliked_paths_json TEXT NOT NULL,
-                    locked_paths_json TEXT NOT NULL,
+                    liked_paths_json TEXT NOT NULL DEFAULT '[]',
+                    disliked_paths_json TEXT NOT NULL DEFAULT '[]',
+                    locked_paths_json TEXT NOT NULL DEFAULT '[]',
                     critique TEXT,
                     parser_interpretation_json TEXT,
                     created_at TEXT NOT NULL
                 );
-                CREATE INDEX IF NOT EXISTS preference_events_retrieval
-                    ON preference_events(component_type, context, created_at DESC);
                 CREATE TABLE IF NOT EXISTS generation_audits (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     output_id TEXT NOT NULL UNIQUE,
@@ -81,34 +81,49 @@ class PreferenceRepository:
                     evidence_ids_json TEXT NOT NULL,
                     created_at TEXT NOT NULL
                 );
-                CREATE INDEX IF NOT EXISTS generation_audits_session
-                    ON generation_audits(session_id, created_at DESC);
-                INSERT OR IGNORE INTO schema_migrations(version, applied_at)
-                    VALUES (1, CURRENT_TIMESTAMP);
                 """
             )
             columns = {row["name"] for row in connection.execute("PRAGMA table_info(preference_events)")}
-            if "candidate_id" not in columns:
-                connection.execute("ALTER TABLE preference_events ADD COLUMN candidate_id TEXT")
+            migrations = {
+                "context_json": "ALTER TABLE preference_events ADD COLUMN context_json TEXT",
+                "evidence_json": "ALTER TABLE preference_events ADD COLUMN evidence_json TEXT",
+                "directives_json": "ALTER TABLE preference_events ADD COLUMN directives_json TEXT",
+                "spec_diff_json": "ALTER TABLE preference_events ADD COLUMN spec_diff_json TEXT",
+            }
+            for column, statement in migrations.items():
+                if column not in columns:
+                    connection.execute(statement)
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS preference_events_retrieval_context "
+                "ON preference_events(component_type, created_at DESC)"
+            )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS generation_audits_session ON generation_audits(session_id, created_at DESC)"
+            )
+            connection.execute(
+                "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (2, CURRENT_TIMESTAMP)"
+            )
 
     def add_event(self, event: PreferenceEventRequest) -> tuple[int, datetime]:
         created_at = datetime.now(UTC)
         with self._connection() as connection:
             before_id = self._snapshot_id(connection, event.beforeSpec, created_at)
             after_id = self._snapshot_id(connection, event.afterSpec, created_at) if event.afterSpec else None
+            diff = _spec_diff(event.beforeSpec, event.afterSpec)
             cursor = connection.execute(
                 """
                 INSERT INTO preference_events (
-                    session_id, component_type, context, target_element_id, action, source,
+                    session_id, component_type, context, context_json, target_element_id, action, source,
                     before_snapshot_id, after_snapshot_id, selected_element_id, candidate_id,
-                    liked_paths_json, disliked_paths_json, locked_paths_json, critique,
-                    parser_interpretation_json, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    liked_paths_json, disliked_paths_json, locked_paths_json, evidence_json, directives_json,
+                    spec_diff_json, critique, parser_interpretation_json, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     event.sessionId,
                     event.componentType,
-                    event.context,
+                    event.context.surface,
+                    _json(event.context.model_dump()),
                     event.targetElementId,
                     event.action,
                     event.source,
@@ -116,9 +131,12 @@ class PreferenceRepository:
                     after_id,
                     event.selectedElementId,
                     event.candidateId,
-                    _json(event.likedPaths),
-                    _json(event.dislikedPaths),
-                    _json(event.lockedPaths),
+                    _json(event.evidence.likedPaths),
+                    _json(event.evidence.dislikedPaths),
+                    _json(event.evidence.lockedPaths),
+                    _json(event.evidence.model_dump()),
+                    _json([directive.model_dump() for directive in event.directives]),
+                    _json([change.model_dump() for change in diff]),
                     event.critique,
                     _json(event.parserInterpretation.model_dump()) if event.parserInterpretation else None,
                     created_at.isoformat(),
@@ -129,47 +147,29 @@ class PreferenceRepository:
         return cursor.lastrowid, created_at
 
     def retrieve(
-        self, component_type: str, context: str | None, paths: set[str], limit: int = 6
+        self,
+        component_type: str,
+        context: DesignContext,
+        query_evidence: PreferenceEvidence,
+        limit: int = 6,
     ) -> list[RetrievedEvidence]:
         with self._connection() as connection:
             rows = connection.execute(
                 """
-                SELECT id, context, source, liked_paths_json, disliked_paths_json,
-                       locked_paths_json, critique, created_at
-                FROM preference_events
-                WHERE component_type = ?
-                ORDER BY id DESC
+                SELECT id, context_json, context, source, evidence_json, liked_paths_json, disliked_paths_json,
+                       locked_paths_json, critique
+                FROM preference_events WHERE component_type = ? ORDER BY id DESC
                 """,
                 (component_type,),
             ).fetchall()
 
-        scored: list[tuple[int, int, RetrievedEvidence]] = []
-        for row in rows:
-            liked = _decode_list(row["liked_paths_json"])
-            disliked = _decode_list(row["disliked_paths_json"])
-            locked = _decode_list(row["locked_paths_json"])
-            event_paths = set(liked + disliked + locked)
-            same_context = _normalise_context(row["context"]) == _normalise_context(context)
-            context_relation = "exact" if same_context or not row["context"] else "mismatch"
-            score = SOURCE_CONFIDENCE[row["source"]] + (100 if same_context else 0) + 15 * len(paths & event_paths)
-            evidence = RetrievedEvidence(
-                id=row["id"],
-                contextRelation=context_relation,
-                preferenceRelation="supporting" if same_context else "unknown",
-                source=row["source"],
-                context=row["context"],
-                likedPaths=liked,
-                dislikedPaths=disliked,
-                lockedPaths=locked,
-                critique=row["critique"],
-            )
-            scored.append((score, row["id"], evidence))
-
-        # A contextual mismatch remains visible, but is not treated as a preference conflict.
-        supporting = sorted((item for item in scored if item[2].contextRelation == "exact"), reverse=True)
-        mismatched = sorted((item for item in scored if item[2].contextRelation == "mismatch"), reverse=True)
-        selected = supporting[: max(1, limit - min(2, len(mismatched)))] + mismatched[:2]
-        return [item[2] for item in sorted(selected, reverse=True)[:limit]]
+        scored = [_retrieval_row(row, context, query_evidence) for row in rows]
+        scored.sort(key=lambda item: (item[0], item[1]), reverse=True)
+        selected = scored[:limit]
+        mismatch = next((item for item in scored if item[2].contextRelation == "mismatch"), None)
+        if mismatch and mismatch not in selected:
+            selected = selected[: max(0, limit - 1)] + [mismatch]
+        return [item[2] for item in selected]
 
     def record_generation(
         self, output_id: str, session_id: str, output_kind: str, evidence_ids: list[int], policy: str | None
@@ -178,8 +178,7 @@ class PreferenceRepository:
             connection.execute(
                 """INSERT INTO generation_audits(
                        output_id, session_id, output_kind, policy, evidence_ids_json, created_at
-                   )
-                   VALUES (?, ?, ?, ?, ?, ?)""",
+                   ) VALUES (?, ?, ?, ?, ?, ?)""",
                 (output_id, session_id, output_kind, policy, _json(evidence_ids), datetime.now(UTC).isoformat()),
             )
 
@@ -193,7 +192,6 @@ class PreferenceRepository:
         return {str(row["policy"]): int(row["count"]) for row in rows}
 
     def evidence_for_output(self, output_id: str) -> list[int]:
-        """Expose the audit link without leaking SQLite details to callers."""
         with self._connection() as connection:
             row = connection.execute(
                 "SELECT evidence_ids_json FROM generation_audits WHERE output_id = ?", (output_id,)
@@ -216,14 +214,119 @@ class PreferenceRepository:
         return int(row["id"])
 
 
+def _retrieval_row(
+    row: sqlite3.Row, context: DesignContext, query_evidence: PreferenceEvidence
+) -> tuple[int, int, RetrievedEvidence]:
+    stored_context = _decode_context(row["context_json"])
+    stored_evidence = _decode_evidence(row)
+    context_relation = _context_relation(context, stored_context)
+    preference_relation = _preference_relation(query_evidence, stored_evidence)
+    score = (
+        SOURCE_CONFIDENCE[str(row["source"])]
+        + STRENGTH_SCORE[stored_evidence.strength]
+        + {"exact": 120, "compatible": 70, "global": 25, "mismatch": 0}[context_relation]
+        + {"supporting": 30, "unknown": 0, "conflicting": -20}[preference_relation]
+    )
+    evidence = RetrievedEvidence(
+        id=row["id"],
+        contextRelation=context_relation,
+        preferenceRelation=preference_relation,
+        source=row["source"],
+        context=stored_context,
+        evidence=stored_evidence,
+        critique=row["critique"],
+    )
+    return score, int(row["id"]), evidence
+
+
+def _decode_context(value: str | None) -> DesignContext | None:
+    if not value:
+        return None
+    try:
+        return DesignContext.model_validate_json(value)
+    except ValueError:
+        return None
+
+
+def _decode_evidence(row: sqlite3.Row) -> PreferenceEvidence:
+    if row["evidence_json"]:
+        return PreferenceEvidence.model_validate_json(row["evidence_json"])
+    return PreferenceEvidence(
+        likedPaths=_decode_paths(row["liked_paths_json"]),
+        dislikedPaths=_decode_paths(row["disliked_paths_json"]),
+        lockedPaths=_decode_paths(row["locked_paths_json"]),
+        strength="weak",
+    )
+
+
+def _decode_paths(
+    value: str,
+) -> list[
+    Literal[
+        "/appearance/recipe", "/appearance/size", "/appearance/radius", "/appearance/density", "/appearance/fontWeight"
+    ]
+]:
+    decoded = json.loads(value)
+    return [
+        item
+        for item in decoded
+        if item
+        in {
+            "/appearance/recipe",
+            "/appearance/size",
+            "/appearance/radius",
+            "/appearance/density",
+            "/appearance/fontWeight",
+        }
+    ]
+
+
+def _context_relation(
+    requested: DesignContext, stored: DesignContext | None
+) -> Literal["exact", "compatible", "global", "mismatch"]:
+    if stored is None:
+        return "global"
+    if stored == requested:
+        return "exact"
+    if stored.role == requested.role and stored.surface == requested.surface:
+        return "compatible"
+    return "mismatch"
+
+
+def _preference_relation(
+    query: PreferenceEvidence, stored: PreferenceEvidence
+) -> Literal["supporting", "conflicting", "unknown"]:
+    requested_positive = set(query.likedPaths + query.lockedPaths)
+    stored_positive = set(stored.likedPaths + stored.lockedPaths)
+    requested_negative = set(query.dislikedPaths)
+    stored_negative = set(stored.dislikedPaths)
+    if requested_positive.intersection(stored_negative) or requested_negative.intersection(stored_positive):
+        return "conflicting"
+    if requested_positive.intersection(stored_positive) or requested_negative.intersection(stored_negative):
+        return "supporting"
+    return "unknown"
+
+
+def _spec_diff(before: dict[str, object], after: dict[str, object] | None) -> list[SpecDiff]:
+    if after is None:
+        return []
+    return _diff_value(before, after, "")
+
+
+def _diff_value(before: object, after: object, path: str) -> list[SpecDiff]:
+    if isinstance(before, dict) and isinstance(after, dict):
+        before_values = cast(dict[str, object], before)
+        after_values = cast(dict[str, object], after)
+        changes: list[SpecDiff] = []
+        for key in sorted(set(before_values) | set(after_values)):
+            changes.extend(_diff_value(before_values.get(key), after_values.get(key), f"{path}/{key}"))
+        return changes
+    if before != after:
+        before_value: object = dict(cast(dict[str, object], before)) if isinstance(before, dict) else before
+        after_value: object = dict(cast(dict[str, object], after)) if isinstance(after, dict) else after
+        return [SpecDiff(path=path or "/", before=before_value, after=after_value)]
+    return []
+
+
 def _json(value: object) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"))
-
-
-def _decode_list(value: str) -> list[str]:
-    decoded = json.loads(value)
-    return [item for item in decoded if isinstance(item, str)]
-
-
-def _normalise_context(context: str | None) -> str:
-    return (context or "").strip().lower()

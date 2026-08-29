@@ -1,0 +1,18 @@
+{
+  "interpretation": {
+    "targetElementId": "continue-button",
+    "evidence": {
+      "likedPaths": ["/appearance/recipe", "/appearance/density"],
+      "dislikedPaths": ["/appearance/radius"],
+      "lockedPaths": ["/appearance/recipe", "/appearance/density"],
+      "strength": "moderate"
+    },
+    "directives": [
+      { "kind": "keep", "path": "/appearance/recipe" },
+      { "kind": "keep", "path": "/appearance/density" },
+      { "kind": "decrease", "path": "/appearance/radius" }
+    ],
+    "ambiguity": [],
+    "rationale": "The critique keeps the coherent recipe and decreases the radius."
+  }
+}

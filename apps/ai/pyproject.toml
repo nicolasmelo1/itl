@@ -47,4 +47,4 @@ extend-exclude = ["../../.software-factory/mutations"]
 line-length = 120
 
 [tool.ruff.lint]
-select = ["E", "F", "I"]
+select = ["E", "F", "I", "E501"]

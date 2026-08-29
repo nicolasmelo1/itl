@@ -1,51 +1,73 @@
-import { type UISpec, validateUISpec } from "@itl/ui-catalog";
+import { buttonAppearanceValues, type UISpec, validateUISpec } from "@itl/ui-catalog";
 
-export const buttonTokenValues = {
-  variant: ["solid", "subtle", "outline"],
-  size: ["compact", "regular"],
-  radius: ["square", "soft", "pill"],
-  density: ["compact", "comfortable"],
-  background: ["accent", "surface", "transparent"],
-  foreground: ["light", "dark"],
-  border: ["none", "subtle", "strong"],
-  fontWeight: ["regular", "semibold"],
-  state: ["default", "disabled", "loading"],
-} as const;
-
+export const buttonTokenValues = buttonAppearanceValues;
 export type ButtonToken = keyof typeof buttonTokenValues;
-export type ButtonPath = `/props/${ButtonToken}`;
-export type PatchIntent = {
-  targetElementId: string;
+export type ButtonPath = `/appearance/${ButtonToken}`;
+export type DesignContext = {
+  role: "primary-action" | "secondary-action";
+  surface: "toolbar" | "hero" | "form" | "dashboard";
+  density: "compact" | "comfortable";
+};
+export type PreferenceEvidence = {
   likedPaths: ButtonPath[];
   dislikedPaths: ButtonPath[];
   lockedPaths: ButtonPath[];
-  explorationPaths: ButtonPath[];
+  strength: "weak" | "moderate" | "strong";
+};
+type DirectiveKind = "keep" | "avoid" | "prefer" | "set" | "increase" | "decrease" | "explore";
+export type AttributeDirective = { kind: DirectiveKind; path: ButtonPath; value?: string };
+export type Interpretation = {
+  targetElementId: string;
+  evidence: PreferenceEvidence;
+  directives: AttributeDirective[];
   ambiguity: string[];
   rationale: string;
 };
-export type RefineVariant = { id: string; kind: "exploit" | "adjacent_explore" | "wild_explore"; spec: UISpec };
+export type RefineVariant = {
+  id: string;
+  kind: "exploit" | "adjacent_explore" | "wild_explore";
+  direction: string;
+  spec: UISpec;
+};
 
 export function isButtonSpec(spec: UISpec, elementId: string) {
   return spec.elements[elementId]?.type === "Button";
 }
 
-export function emptyIntent(targetElementId: string): PatchIntent {
-  return { targetElementId, likedPaths: [], dislikedPaths: [], lockedPaths: [], explorationPaths: [], ambiguity: [], rationale: "Direct token edit." };
+export function emptyInterpretation(targetElementId: string): Interpretation {
+  return {
+    targetElementId,
+    evidence: { likedPaths: [], dislikedPaths: [], lockedPaths: [], strength: "strong" },
+    directives: [],
+    ambiguity: [],
+    rationale: "Direct visual edit.",
+  };
 }
 
-export function updateIntent(intent: PatchIntent, category: "lockedPaths" | "explorationPaths", path: ButtonPath, checked: boolean): PatchIntent {
-  const next = structuredClone(intent);
-  const other = category === "lockedPaths" ? "explorationPaths" : "lockedPaths";
-  next[category] = checked ? [...new Set([...next[category], path])] : next[category].filter((current) => current !== path);
-  if (checked) next[other] = next[other].filter((current) => current !== path);
-  return next;
+export function updateInterpretation(
+  interpretation: Interpretation,
+  kind: "keep" | "explore",
+  path: ButtonPath,
+  checked: boolean,
+): Interpretation {
+  const withoutPath = interpretation.directives.filter((directive) => directive.path !== path);
+  const directives = checked ? [...withoutPath, { kind, path } as AttributeDirective] : withoutPath;
+  const lockedPaths = directives.filter((directive) => directive.kind === "keep").map((directive) => directive.path);
+  const dislikedPaths = directives
+    .filter((directive) => directive.kind === "explore")
+    .map((directive) => directive.path);
+  return {
+    ...interpretation,
+    directives,
+    evidence: { ...interpretation.evidence, lockedPaths, dislikedPaths },
+  };
 }
 
 export function setButtonToken(spec: UISpec, targetElementId: string, token: ButtonToken, value: string): UISpec {
   const next = structuredClone(spec);
   const element = next.elements[targetElementId];
   if (!element || element.type !== "Button" || !buttonTokenValues[token].includes(value as never)) return spec;
-  element.props[token] = value as never;
+  element.props.appearance[token] = value as never;
   const validation = validateUISpec(next);
   return validation.valid ? validation.spec : spec;
 }

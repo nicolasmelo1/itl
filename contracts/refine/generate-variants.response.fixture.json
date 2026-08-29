@@ -3,11 +3,13 @@
     {
       "id": "exploit-1",
       "kind": "exploit",
+      "direction": "directive-led refinement",
       "spec": { "version": "itl.ui/v1", "root": "continue-button", "elements": {} }
     },
     {
       "id": "adjacent-explore-1",
       "kind": "adjacent_explore",
+      "direction": "one nearby coherent visual change",
       "spec": { "version": "itl.ui/v1", "root": "continue-button", "elements": {} }
     }
   ]

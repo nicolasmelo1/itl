@@ -1,45 +1,45 @@
-"""Typed boundary models for the refinement API.
-
-These models deliberately live in the Python service. The JSON fixtures under
-``contracts/refine`` are the shared HTTP examples; neither application imports
-the other application's runtime types.
-"""
+"""Typed HTTP models for the contextual Button refinement boundary."""
 
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 UI_SPEC_VERSION = "itl.ui/v1"
-BUTTON_TOKEN_VALUES: dict[str, tuple[str, ...]] = {
-    "variant": ("solid", "subtle", "outline"),
-    "size": ("compact", "regular"),
-    "radius": ("square", "soft", "pill"),
-    "density": ("compact", "comfortable"),
-    "background": ("accent", "surface", "transparent"),
-    "foreground": ("light", "dark"),
-    "border": ("none", "subtle", "strong"),
-    "fontWeight": ("regular", "semibold"),
-    "state": ("default", "disabled", "loading"),
-}
-BUTTON_TOKEN_PATHS = frozenset(f"/props/{name}" for name in BUTTON_TOKEN_VALUES)
+VisualPath = Literal[
+    "/appearance/recipe",
+    "/appearance/size",
+    "/appearance/radius",
+    "/appearance/density",
+    "/appearance/fontWeight",
+]
 
 
 class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class ButtonProps(StrictModel):
+class ButtonContent(StrictModel):
     label: str = Field(min_length=1)
-    variant: Literal["solid", "subtle", "outline"]
+
+
+class ButtonSemantic(StrictModel):
+    role: Literal["primary-action", "secondary-action"]
+    state: Literal["default", "disabled", "loading"]
+
+
+class ButtonAppearance(StrictModel):
+    recipe: Literal["primary", "secondary", "outline", "ghost"]
     size: Literal["compact", "regular"]
     radius: Literal["square", "soft", "pill"]
     density: Literal["compact", "comfortable"]
-    background: Literal["accent", "surface", "transparent"]
-    foreground: Literal["light", "dark"]
-    border: Literal["none", "subtle", "strong"]
     fontWeight: Literal["regular", "semibold"]
-    state: Literal["default", "disabled", "loading"]
+
+
+class ButtonProps(StrictModel):
+    content: ButtonContent
+    semantic: ButtonSemantic
+    appearance: ButtonAppearance
 
 
 class InputProps(StrictModel):
@@ -74,11 +74,81 @@ class ErrorResponse(StrictModel):
     recoverable: bool = True
 
 
+class DesignContext(StrictModel):
+    role: Literal["primary-action", "secondary-action"]
+    surface: Literal["toolbar", "hero", "form", "dashboard"]
+    density: Literal["compact", "comfortable"]
+
+
+class PreferenceEvidence(StrictModel):
+    likedPaths: list[VisualPath] = []
+    dislikedPaths: list[VisualPath] = []
+    lockedPaths: list[VisualPath] = []
+    strength: Literal["weak", "moderate", "strong"] = "moderate"
+
+
+class KeepDirective(StrictModel):
+    kind: Literal["keep"]
+    path: VisualPath
+
+
+class AvoidDirective(StrictModel):
+    kind: Literal["avoid"]
+    path: VisualPath
+
+
+class PreferDirective(StrictModel):
+    kind: Literal["prefer"]
+    path: VisualPath
+    value: str
+
+
+class SetDirective(StrictModel):
+    kind: Literal["set"]
+    path: VisualPath
+    value: str
+
+
+class IncreaseDirective(StrictModel):
+    kind: Literal["increase"]
+    path: VisualPath
+
+
+class DecreaseDirective(StrictModel):
+    kind: Literal["decrease"]
+    path: VisualPath
+
+
+class ExploreDirective(StrictModel):
+    kind: Literal["explore"]
+    path: VisualPath
+
+
+AttributeDirective = Annotated[
+    KeepDirective
+    | AvoidDirective
+    | PreferDirective
+    | SetDirective
+    | IncreaseDirective
+    | DecreaseDirective
+    | ExploreDirective,
+    Field(discriminator="kind"),
+]
+
+
+class Interpretation(StrictModel):
+    targetElementId: str = Field(pattern=r"^[a-z][a-z0-9-]*$")
+    evidence: PreferenceEvidence
+    directives: list[AttributeDirective]
+    ambiguity: list[str] = []
+    rationale: str = Field(min_length=1)
+
+
 class GenerateSpecRequest(StrictModel):
     target: Literal["Button"] = "Button"
     prompt: str = Field(default="A primary action", min_length=1, max_length=4_000)
     sessionId: str = Field(default="local", pattern=r"^[a-zA-Z0-9_-]{1,80}$")
-    context: str | None = Field(default=None, max_length=200)
+    context: DesignContext
 
 
 class GenerateSpecResponse(StrictModel):
@@ -94,28 +164,18 @@ class ParseCritiqueRequest(StrictModel):
     critique: str = Field(min_length=1, max_length=4_000)
 
 
-class PatchIntent(StrictModel):
-    targetElementId: str = Field(pattern=r"^[a-z][a-z0-9-]*$")
-    likedPaths: list[str] = []
-    dislikedPaths: list[str] = []
-    lockedPaths: list[str] = []
-    explorationPaths: list[str] = []
-    ambiguity: list[str] = []
-    rationale: str = Field(min_length=1)
-
-
 class ParseCritiqueResponse(StrictModel):
-    intent: PatchIntent
+    interpretation: Interpretation
 
 
 class GenerateVariantsRequest(StrictModel):
     specVersion: Literal["itl.ui/v1"]
     spec: dict[str, object]
     targetElementId: str = Field(pattern=r"^[a-z][a-z0-9-]*$")
-    intent: PatchIntent
+    interpretation: Interpretation
     includeWild: bool = False
     sessionId: str = Field(default="local", pattern=r"^[a-zA-Z0-9_-]{1,80}$")
-    context: str | None = Field(default=None, max_length=200)
+    context: DesignContext
 
 
 class Variant(StrictModel):
@@ -131,12 +191,18 @@ class GenerateVariantsResponse(StrictModel):
     outputId: str
 
 
+class SpecDiff(StrictModel):
+    path: str
+    before: object | None = None
+    after: object | None = None
+
+
 class PreferenceEventRequest(StrictModel):
     """An explicit, append-only action from the refinement UI."""
 
     sessionId: str = Field(default="local", pattern=r"^[a-zA-Z0-9_-]{1,80}$")
     componentType: Literal["Button"] = "Button"
-    context: str | None = Field(default=None, max_length=200)
+    context: DesignContext
     targetElementId: str = Field(pattern=r"^[a-z][a-z0-9-]*$")
     action: Literal[
         "manual_edit",
@@ -162,11 +228,10 @@ class PreferenceEventRequest(StrictModel):
     afterSpec: dict[str, object] | None = None
     selectedElementId: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]*$")
     candidateId: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]*$")
-    likedPaths: list[str] = []
-    dislikedPaths: list[str] = []
-    lockedPaths: list[str] = []
+    evidence: PreferenceEvidence = PreferenceEvidence()
+    directives: list[AttributeDirective] = []
     critique: str | None = Field(default=None, max_length=4_000)
-    parserInterpretation: PatchIntent | None = None
+    parserInterpretation: Interpretation | None = None
 
 
 class PreferenceEventResponse(StrictModel):
@@ -176,14 +241,17 @@ class PreferenceEventResponse(StrictModel):
 
 class RetrievedEvidence(StrictModel):
     id: int
-    contextRelation: Literal["exact", "mismatch"]
+    contextRelation: Literal["exact", "compatible", "global", "mismatch"]
     preferenceRelation: Literal["supporting", "conflicting", "unknown"]
     source: str
-    context: str | None = None
-    likedPaths: list[str]
-    dislikedPaths: list[str]
-    lockedPaths: list[str]
+    context: DesignContext | None = None
+    evidence: PreferenceEvidence
     critique: str | None = None
+
+
+class MemoryQuery(StrictModel):
+    context: DesignContext
+    evidence: PreferenceEvidence = PreferenceEvidence()
 
 
 class MemoryResponse(StrictModel):
