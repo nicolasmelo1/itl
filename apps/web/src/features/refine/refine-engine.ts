@@ -46,16 +46,21 @@ export function emptyInterpretation(targetElementId: string): Interpretation {
 
 export function updateInterpretation(
   interpretation: Interpretation,
-  kind: "keep" | "explore",
   path: ButtonPath,
-  checked: boolean,
+  keep: boolean,
 ): Interpretation {
-  const withoutPath = interpretation.directives.filter((directive) => directive.path !== path);
-  const directives = checked ? [...withoutPath, { kind, path } as AttributeDirective] : withoutPath;
-  const lockedPaths = directives.filter((directive) => directive.kind === "keep").map((directive) => directive.path);
-  const dislikedPaths = directives
-    .filter((directive) => directive.kind === "explore")
-    .map((directive) => directive.path);
+  const keepPaths = new Set(
+    interpretation.directives.filter((directive) => directive.kind === "keep").map((directive) => directive.path),
+  );
+  if (keep) keepPaths.add(path);
+  else keepPaths.delete(path);
+  const paths = Object.keys(buttonTokenValues).map((token) => `/appearance/${token}` as ButtonPath);
+  const directives = paths.map((appearancePath) => ({
+    kind: keepPaths.has(appearancePath) ? "keep" : "explore",
+    path: appearancePath,
+  }) as AttributeDirective);
+  const lockedPaths = paths.filter((appearancePath) => keepPaths.has(appearancePath));
+  const dislikedPaths = paths.filter((appearancePath) => !keepPaths.has(appearancePath));
   return {
     ...interpretation,
     directives,

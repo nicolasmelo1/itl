@@ -36,6 +36,7 @@ export async function recordPreferenceEvent(input: {
   interpretation?: Interpretation | null;
 }) {
   if (typeof window === "undefined" || typeof fetch === "undefined") return false;
+  const { interpretation, ...event } = input;
   try {
     const response = await fetch(
       `${process.env.NEXT_PUBLIC_AI_BASE_URL ?? "http://127.0.0.1:8000"}/v1/preference-events`,
@@ -45,10 +46,10 @@ export async function recordPreferenceEvent(input: {
         body: JSON.stringify({
           sessionId: "local",
           componentType: "Button",
-          ...input,
-          evidence: input.evidence ?? input.interpretation?.evidence ?? emptyEvidence(input.action),
-          directives: input.directives ?? input.interpretation?.directives ?? [],
-          parserInterpretation: input.interpretation ?? undefined,
+          ...event,
+          evidence: input.evidence ?? interpretation?.evidence ?? emptyEvidence(input.action),
+          directives: input.directives ?? interpretation?.directives ?? [],
+          parserInterpretation: interpretation ?? undefined,
         }),
       },
     );
