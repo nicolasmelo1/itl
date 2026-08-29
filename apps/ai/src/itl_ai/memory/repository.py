@@ -204,7 +204,8 @@ class PreferenceRepository:
             (encoded, created_at.isoformat()),
         )
         row = connection.execute("SELECT id FROM spec_snapshots WHERE spec_json = ?", (encoded,)).fetchone()
-        assert row is not None
+        if row is None:
+            raise RuntimeError("SQLite did not return the snapshot it just stored.")
         return int(row["id"])
 
 

@@ -6,6 +6,7 @@ import json
 import unicodedata
 from typing import Protocol
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 from itl_ai.config.settings import Settings
@@ -143,6 +144,9 @@ class OpenAICompatibleRefineProvider:
     """Minimal JSON-only adapter for Ollama Cloud or the OpenAI API."""
 
     def __init__(self, base_url: str, api_key: str, model: str) -> None:
+        parsed = urlparse(base_url)
+        if parsed.scheme != "https" or not parsed.netloc:
+            raise ValueError("A remote model provider must use an absolute HTTPS URL.")
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.model = model
@@ -184,7 +188,7 @@ class OpenAICompatibleRefineProvider:
             method="POST",
         )
         try:
-            with urlopen(request, timeout=45) as response:  # noqa: S310 - URL comes only from server config.
+            with urlopen(request, timeout=45) as response:  # nosec B310 - constructor permits absolute HTTPS URLs only.
                 decoded = json.loads(response.read().decode())
         except (HTTPError, URLError, TimeoutError) as exc:
             raise RuntimeError("The configured model provider could not complete the request.") from exc
