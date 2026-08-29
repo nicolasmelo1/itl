@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from itl_ai.config.settings import load_settings
+from itl_ai.memory.repository import PreferenceRepository
 from itl_ai.refine.catalog import RefineValidationError
 from itl_ai.refine.models import (
     ErrorResponse as RefineErrorResponse,
@@ -16,9 +17,13 @@ from itl_ai.refine.models import (
     GenerateSpecResponse,
     GenerateVariantsRequest,
     GenerateVariantsResponse,
+    MemoryResponse,
     ParseCritiqueRequest,
     ParseCritiqueResponse,
+    PreferenceEventRequest,
+    PreferenceEventResponse,
 )
+from itl_ai.refine.providers import configured_provider
 from itl_ai.refine.service import RefineService
 
 app = FastAPI(title="ITL AI API", version="0.1.0")
@@ -28,7 +33,12 @@ app.add_middleware(
     allow_methods=["POST"],
     allow_headers=["Content-Type"],
 )
-refine_service = RefineService()
+def _refine_service() -> RefineService:
+    settings = load_settings()
+    return RefineService(PreferenceRepository(settings.preference_database_path), configured_provider(settings))
+
+
+refine_service = _refine_service()
 
 
 class HealthResponse(BaseModel):
@@ -129,6 +139,22 @@ def parse_critique(request: ParseCritiqueRequest) -> ParseCritiqueResponse:
 def generate_variants(request: GenerateVariantsRequest) -> GenerateVariantsResponse:
     """Create only validated variants with locks checked deterministically."""
     return refine_service.generate_variants(request)
+
+
+@app.post(
+    "/v1/preference-events",
+    response_model=PreferenceEventResponse,
+    responses={status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": RefineErrorResponse}},
+)
+def record_preference_event(request: PreferenceEventRequest) -> PreferenceEventResponse:
+    """Append an explicit action and immutable renderable snapshots to local memory."""
+    return refine_service.record_preference_event(request)
+
+
+@app.get("/v1/preference-memory", response_model=MemoryResponse)
+def preference_memory(context: str | None = None, paths: list[str] | None = None) -> MemoryResponse:
+    """Return bounded, contextual evidence for the Button generator and memory UI."""
+    return refine_service.preference_memory(context, set(paths or []))
 
 
 def run() -> None:

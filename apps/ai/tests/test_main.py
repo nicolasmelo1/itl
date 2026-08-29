@@ -1,8 +1,16 @@
+import pytest
 from fastapi.testclient import TestClient
 
-from itl_ai.main import app
+import itl_ai.main as main
+from itl_ai.memory.repository import PreferenceRepository
+from itl_ai.refine.service import RefineService
 
-client = TestClient(app)
+client = TestClient(main.app)
+
+
+@pytest.fixture(autouse=True)
+def isolated_preference_memory(tmp_path) -> None:
+    main.refine_service = RefineService(PreferenceRepository(tmp_path / "preferences.sqlite"))
 
 
 def test_health_is_available_without_provider_credentials(monkeypatch) -> None:

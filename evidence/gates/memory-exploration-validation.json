@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "gate": "memory-exploration-validation",
+  "implementation_sha256": "fe1d3687f2bd8cc84435c29fa44047714add6f1e4dad2c7496debaf6c8d80950",
+  "runs": [
+    {
+      "scenario": "memory-exploration-validation",
+      "status": "passed",
+      "actor": "Codex",
+      "report": "evidence/reports/memory-exploration-validation.json",
+      "report_sha256": "8b658b3838e0e4d3a933af71d9e21519b01115abfccc0d8fea58572cfc419c86",
+      "required_assertions": [
+        "memory.explicit_feedback_is_immutable_and_queryable",
+        "memory.retrieval_is_auditable_and_contextual",
+        "exploration.policies_are_distinct_and_non_coercive",
+        "evaluation.counterfactual_constraints_hold",
+        "evaluation.holdout_is_excluded_from_optimization"
+      ]
+    }
+  ]
+}

@@ -14,6 +14,7 @@
     "test": "pnpm --filter @itl/web test && uv --directory apps/ai run pytest",
     "build": "pnpm --filter @itl/web build && uv --directory apps/ai build",
     "verify:project-setup": "node scripts/verify-project-setup.mjs",
-    "verify:controlled-ui-language": "node scripts/verify-controlled-ui-language.mjs"
+    "verify:controlled-ui-language": "node scripts/verify-controlled-ui-language.mjs",
+    "verify:memory-exploration-validation": "node scripts/verify-memory-exploration-validation.mjs"
   }
 }

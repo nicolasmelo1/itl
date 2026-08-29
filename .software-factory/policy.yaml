@@ -32,7 +32,7 @@ gates:
     plan: "plans/03-critique-refine-loop.md"
     required_assertions: ["refine.critique_yields_reviewable_patch_intent", "refine.locks_are_preserved", "refine.explored_values_are_valid", "refine.rejection_is_not_a_preference", "refine.invalid_model_output_preserves_current_spec"]
   memory-exploration-validation:
-    activation: ["apps/ai/src/itl_ai/preference/**", "apps/ai/src/itl_ai/retrieval/**", "apps/ai/src/itl_ai/evaluation/**", "apps/web/src/features/memory/**", "data/migrations/**"]
+    activation: ["apps/ai/src/itl_ai/memory/**", "apps/ai/src/itl_ai/refine/**", "apps/ai/src/itl_ai/main.py", "apps/web/src/features/refine/memory-client.ts", "apps/web/src/features/canvas/**", "data/migrations/**"]
     evidence: "evidence/gates/memory-exploration-validation.json"
     plan: "plans/04-memory-exploration-validation.md"
     required_assertions: ["memory.explicit_feedback_is_immutable_and_queryable", "memory.retrieval_is_auditable_and_contextual", "exploration.policies_are_distinct_and_non_coercive", "evaluation.counterfactual_constraints_hold", "evaluation.holdout_is_excluded_from_optimization"]

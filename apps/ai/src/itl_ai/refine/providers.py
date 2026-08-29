@@ -5,7 +5,11 @@
 import json
 import unicodedata
 from typing import Protocol
+from urllib.parse import urlparse
 
+import httpx
+
+from itl_ai.config.settings import Settings
 from itl_ai.refine.models import ParseCritiqueRequest
 
 
@@ -46,7 +50,7 @@ class RefineProvider(Protocol):
 class DeterministicRefineProvider:
     """Fixture-backed provider used by tests and local development without credentials."""
 
-    def generate_spec(self, _: str) -> str:
+    def generate_spec(self, prompt: str) -> str:
         return json.dumps(
             {
                 "version": "itl.ui/v1",
@@ -91,18 +95,10 @@ class DeterministicRefineProvider:
         liked: list[str] = []
         disliked: list[str] = []
         terms = (
-            ("cor", "/props/background"),
-            ("color", "/props/background"),
-            ("fundo", "/props/background"),
-            ("espac", "/props/density"),
-            ("spacing", "/props/density"),
-            ("dens", "/props/density"),
-            ("arredond", "/props/radius"),
-            ("radius", "/props/radius"),
-            ("round", "/props/radius"),
-            ("borda", "/props/border"),
-            ("contorno", "/props/border"),
-            ("peso", "/props/fontWeight"),
+            ("cor", "/props/background"), ("color", "/props/background"), ("fundo", "/props/background"),
+            ("espac", "/props/density"), ("spacing", "/props/density"), ("dens", "/props/density"),
+            ("arredond", "/props/radius"), ("radius", "/props/radius"), ("round", "/props/radius"),
+            ("borda", "/props/border"), ("contorno", "/props/border"), ("peso", "/props/fontWeight"),
             ("negrito", "/props/fontWeight"),
         )
         for term, path in terms:
@@ -119,17 +115,15 @@ class DeterministicRefineProvider:
                 )
             ) or (
                 path == "/props/radius"
-                and any(phrase in normalized for phrase in ("arredondado demais", "muito arredondado", "too rounded"))
+                and any(
+                    phrase in normalized
+                    for phrase in ("arredondado demais", "muito arredondado", "too rounded")
+                )
             )
-            if negative:
-                disliked.append(path)
-            else:
-                liked.append(path)
+            (disliked if negative else liked).append(path)
         liked = list(dict.fromkeys(liked))
         disliked = list(dict.fromkeys(disliked))
-        ambiguity: list[str] = []
-        if not liked and not disliked:
-            ambiguity.append("No supported Button token was identified. Choose tokens manually.")
+        ambiguity = [] if liked or disliked else ["No supported Button token was identified. Choose tokens manually."]
         return json.dumps(
             {
                 "targetElementId": request.targetElementId,
@@ -139,11 +133,80 @@ class DeterministicRefineProvider:
                 "explorationPaths": disliked,
                 "ambiguity": ambiguity,
                 "rationale": (
-                    "Explicitly liked tokens are proposed as locks; disliked tokens are "
-                    "proposed for bounded exploration."
+                    "Explicitly liked tokens are proposed as locks; "
+                    "disliked tokens are proposed for bounded exploration."
                 ),
             }
         )
+
+
+class OpenAICompatibleRefineProvider:
+    """Minimal JSON-only adapter for Ollama Cloud or the OpenAI API."""
+
+    def __init__(self, base_url: str, api_key: str, model: str) -> None:
+        parsed = urlparse(base_url)
+        if parsed.scheme != "https" or not parsed.netloc:
+            raise ValueError("A remote model provider must use an absolute HTTPS URL.")
+        self.base_url = base_url.rstrip("/")
+        self.api_key = api_key
+        self.model = model
+
+    def generate_spec(self, prompt: str) -> str:
+        return self._complete(
+            "Return exactly one JSON UI spec for a Button from the supplied request. No markdown.",
+            prompt,
+        )
+
+    def parse_critique(self, request: ParseCritiqueRequest) -> str:
+        return self._complete(
+            "Return exactly one JSON PatchIntent. Only use documented /props Button paths; no markdown.",
+            json.dumps(
+                {
+                    "spec": request.spec,
+                    "targetElementId": request.targetElementId,
+                    "critique": request.critique,
+                }
+            ),
+        )
+
+    def _complete(self, instructions: str, input_text: str) -> str:
+        body = json.dumps(
+            {
+                "model": self.model,
+                "messages": [
+                    {"role": "system", "content": instructions},
+                    {"role": "user", "content": input_text},
+                ],
+                "response_format": {"type": "json_object"},
+                "temperature": 0,
+            }
+        ).encode()
+        try:
+            response = httpx.post(
+                f"{self.base_url}/chat/completions",
+                content=body,
+                headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
+                timeout=45,
+            )
+            response.raise_for_status()
+            decoded = response.json()
+        except (httpx.HTTPError, ValueError) as exc:
+            raise RuntimeError("The configured model provider could not complete the request.") from exc
+        content = decoded.get("choices", [{}])[0].get("message", {}).get("content")
+        if not isinstance(content, str):
+            raise RuntimeError("The configured model provider returned no text completion.")
+        return content
+
+
+def configured_provider(settings: Settings) -> RefineProvider:
+    """Choose an opt-in remote provider; deterministic fixtures stay the safe default."""
+    if settings.llm_provider == "ollama" and settings.ollama_api_key:
+        return OpenAICompatibleRefineProvider(settings.ollama_base_url, settings.ollama_api_key, settings.ollama_model)
+    if settings.llm_provider == "openai" and settings.openai_api_key:
+        return OpenAICompatibleRefineProvider(
+            "https://api.openai.com/v1", settings.openai_api_key, settings.openai_model
+        )
+    return DeterministicRefineProvider()
 
 
 class DSPyRefineProvider:

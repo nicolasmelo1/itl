@@ -150,19 +150,22 @@ def validate_intent(intent: PatchIntent, target_element_id: str) -> None:
         raise _error("missing_exploration", "Choose at least one token path to explore.")
 
 
-def create_variants(spec: object, target_element_id: str, intent: PatchIntent, include_wild: bool) -> list[Variant]:
+def create_variants(
+    spec: object, target_element_id: str, intent: PatchIntent, include_wild: bool, include_adjacent: bool = True
+) -> list[Variant]:
     current = validate_ui_spec(spec)
     original_props = button_props(current, target_element_id)
     validate_intent(intent, target_element_id)
-    kinds: list[tuple[str, Literal["exploit", "adjacent_explore", "wild_explore"]]] = [
-        ("exploit-1", "exploit"),
-        ("adjacent-explore-1", "adjacent_explore"),
+    kinds: list[tuple[str, Literal["exploit", "adjacent_explore", "wild_explore"], str]] = [
+        ("exploit-1", "exploit", "evidence-led refinement")
     ]
+    if include_adjacent:
+        kinds.append(("adjacent-explore-1", "adjacent_explore", "adjacent catalog alternative"))
     if include_wild:
-        kinds.append(("wild-explore-1", "wild_explore"))
+        kinds.append(("wild-explore-1", "wild_explore", "high-contrast editorial direction"))
     return [
-        _create_variant(current, original_props, intent, index, variant_id, kind)
-        for index, (variant_id, kind) in enumerate(kinds)
+        _create_variant(current, original_props, intent, index, variant_id, kind, direction)
+        for index, (variant_id, kind, direction) in enumerate(kinds)
     ]
 
 
@@ -173,6 +176,7 @@ def _create_variant(
     variant_index: int,
     variant_id: str,
     kind: Literal["exploit", "adjacent_explore", "wild_explore"],
+    direction: str,
 ) -> Variant:
     candidate = deepcopy(current)
     raw_target = _elements(candidate)[intent.targetElementId]
@@ -188,7 +192,7 @@ def _create_variant(
     validated = validate_ui_spec(candidate)
     validated_props = button_props(validated, intent.targetElementId)
     _assert_paths_preserved(validated_props, original_props, intent)
-    return Variant(id=variant_id, kind=kind, spec=validated)
+    return Variant(id=variant_id, kind=kind, direction=direction, spec=validated)
 
 
 def _assert_paths_preserved(candidate: dict[str, object], original: dict[str, object], intent: PatchIntent) -> None:

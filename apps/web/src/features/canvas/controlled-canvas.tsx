@@ -16,6 +16,7 @@ import {
   setButtonToken,
   updateIntent,
 } from "../refine/refine-engine";
+import { recordPreferenceEvent } from "../refine/memory-client";
 
 import styles from "./controlled-canvas.module.css";
 
@@ -27,6 +28,7 @@ export function ControlledCanvas() {
   const [intent, setIntent] = useState<PatchIntent | null>(null);
   const [variants, setVariants] = useState<RefineVariant[]>([]);
   const [status, setStatus] = useState("Select a Button and describe what to retain or explore.");
+  const [memoryEvents, setMemoryEvents] = useState(0);
 
   useEffect(() => markDevtoolsActive(), []);
 
@@ -38,7 +40,9 @@ export function ControlledCanvas() {
       setStatus("Select a Button before submitting feedback.");
       return;
     }
-    setIntent(parseCritiqueLocally(critique, selectedElementId));
+    const interpreted = parseCritiqueLocally(critique, selectedElementId);
+    setIntent(interpreted);
+    void recordPreferenceEvent({ action: "confirmed_critique", source: "confirmed_critique", beforeSpec: currentSpec, targetElementId: selectedElementId, critique, intent: interpreted }).then(recorded => setMemoryEvents(count => count + Number(recorded)));
     setVariants([]);
     setStatus("Review the proposed Keep and Explore tokens before generating alternatives.");
   }
@@ -55,12 +59,14 @@ export function ControlledCanvas() {
 
   function editToken(token: ButtonToken, value: string) {
     if (!selectedIsButton) return;
-    setCurrentSpec((spec) => setButtonToken(spec, selectedElementId, token, value));
+    const nextSpec = setButtonToken(currentSpec, selectedElementId, token, value);
+    setCurrentSpec(nextSpec);
     setIntent((current) => {
       const base = current ?? parseCritiqueLocally("", selectedElementId);
       return updateIntent(base, "lockedPaths", `/props/${token}` as ButtonPath, true);
     });
     setVariants([]);
+    void recordPreferenceEvent({ action: "manual_edit", source: "manual_edit", beforeSpec: currentSpec, afterSpec: nextSpec, targetElementId: selectedElementId }).then(recorded => setMemoryEvents(count => count + Number(recorded)));
     setStatus(`${token} was directly edited and is now stronger Keep evidence.`);
   }
 
@@ -74,6 +80,7 @@ export function ControlledCanvas() {
           Selected element: {selectedElementId}
         </p>
         <p aria-live="polite" className={styles.status} data-testid="refine-status">{status}</p>
+        <aside aria-label="Preference memory" className={styles.notice}>Preference memory: {memoryEvents} explicit action{memoryEvents === 1 ? "" : "s"} stored locally when the AI service is running.</aside>
 
         {selectedIsButton && selectedButton?.type === "Button" ? (
           <section aria-label="Button critique" className={styles.panel} onClick={(event) => event.stopPropagation()}>
@@ -86,7 +93,7 @@ export function ControlledCanvas() {
                 ["indiferente", "Indiferente"],
                 ["não gosto", "Não gosto"],
               ].map(([value, label]) => (
-                <button aria-pressed={reaction === value} className={styles.reaction} key={value} onClick={() => setReaction(value)} type="button">
+                <button aria-pressed={reaction === value} className={styles.reaction} key={value} onClick={() => { setReaction(value); void recordPreferenceEvent({ action: value === "indiferente" ? "indifference" : "absolute_feedback", source: "absolute_feedback", beforeSpec: currentSpec, targetElementId: selectedElementId, critique: value }).then(recorded => setMemoryEvents(count => count + Number(recorded))); }} type="button">
                   {label}
                 </button>
               ))}
@@ -122,9 +129,9 @@ export function ControlledCanvas() {
               {!variants.some((variant) => variant.kind === "wild_explore") ? <button onClick={() => generateVariants(true)} type="button">Explore this direction</button> : null}
             </div>
             <div className={styles.variantGrid}>
-              {variants.map((variant) => <VariantCard key={variant.id} variant={variant} onAccept={() => { setCurrentSpec(variant.spec); setVariants([]); setStatus(`${variant.kind} was accepted.`); }} onEvidence={(evidence) => setStatus(`${evidence} was recorded for ${variant.kind}; no winner was assumed.`)} />)}
+              {variants.map((variant) => <VariantCard key={variant.id} variant={variant} onAccept={() => { void recordPreferenceEvent({ action: "pairwise_choice", source: "pairwise_choice", beforeSpec: currentSpec, afterSpec: variant.spec, targetElementId: selectedElementId, selectedElementId: variant.id, intent }).then(recorded => setMemoryEvents(count => count + Number(recorded))); setCurrentSpec(variant.spec); setVariants([]); setStatus(`${variant.kind} was accepted.`); }} onEvidence={(evidence) => { const action = evidence === "Indifference" ? "indifference" : evidence === "Mix request" ? "explore_more" : "explicit_attribute_feedback"; const source = action === "explicit_attribute_feedback" ? "explicit_attribute_feedback" : "absolute_feedback"; void recordPreferenceEvent({ action, source, beforeSpec: currentSpec, targetElementId: selectedElementId, selectedElementId: variant.id, intent }).then(recorded => setMemoryEvents(count => count + Number(recorded))); setStatus(`${evidence} was recorded for ${variant.kind}; no winner was assumed.`); }} />)}
             </div>
-            <button className={styles.rejectAll} onClick={() => { setVariants([]); setStatus("None of these was recorded. No option was selected as a winner."); }} type="button">Reject all</button>
+            <button className={styles.rejectAll} onClick={() => { void recordPreferenceEvent({ action: "rejection", source: "absolute_feedback", beforeSpec: currentSpec, targetElementId: selectedElementId, intent }).then(recorded => setMemoryEvents(count => count + Number(recorded))); setVariants([]); setStatus("None of these was recorded. No option was selected as a winner."); }} type="button">Reject all</button>
           </section>
         ) : null}
       </div>

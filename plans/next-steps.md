@@ -10,6 +10,7 @@ for the next one; no plan adds GEPA.
 | 2 | [02-controlled-ui-language.md](02-controlled-ui-language.md) — implement the constrained UI catalog and its component workbench | A validated JSON spec renders the supported atom states identically in the app and Storybook. |
 | 3 | [03-critique-refine-loop.md](03-critique-refine-loop.md) — implement generate, critique, locks, and local variation | A user can preserve liked button attributes, change a disliked one, and reject all alternatives without an A/B choice. |
 | 4 | [04-memory-exploration-validation.md](04-memory-exploration-validation.md) — persist evidence and validate safe exploration | A later generation uses relevant prior evidence, records exploration separately, and passes the MVP evaluation suite. |
+| 5 | [05-button-contextual-lab.md](05-button-contextual-lab.md) — make Button a contextual, semantic preference laboratory | Directives, recipes, typed contexts, and one web→API refinement path are proven before another editable component exists. |
 
 ## Parked
 
