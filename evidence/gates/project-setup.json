@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "gate": "project-setup",
-  "implementation_sha256": "97ac4bdf669b87f4bc14598518909e013f53b7d0ec37dc016cf7b65e1867f357",
+  "implementation_sha256": "51cdda8b5642335b158e6f5686d16a7c2bd51d0a22507ecaa69f6219f9765dda",
   "runs": [
     {
       "scenario": "project-setup",
