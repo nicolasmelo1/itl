@@ -1,9 +1,11 @@
+import json
 from pathlib import Path
 
 from itl_ai.memory.repository import PreferenceRepository
 from itl_ai.refine.models import (
     DecreaseDirective,
     DesignContext,
+    GenerateVariantsRequest,
     Interpretation,
     PreferenceEventRequest,
     PreferenceEvidence,
@@ -103,7 +105,7 @@ def test_button_retrieval_reports_compatible_and_conflicting_relations(tmp_path:
     assert conflicting.preferenceRelation == "conflicting"
 
 
-def test_explicit_recipe_centroid_is_opt_in_and_preserves_keeps(tmp_path: Path) -> None:
+def test_wild_policy_preserves_explicit_keeps(tmp_path: Path) -> None:
     refine, _ = service(tmp_path)
     request = Interpretation(
         targetElementId="continue-button",
@@ -114,8 +116,6 @@ def test_explicit_recipe_centroid_is_opt_in_and_preserves_keeps(tmp_path: Path) 
         ],
         rationale="Keep primary recipe while reducing radius.",
     )
-    from itl_ai.refine.models import GenerateVariantsRequest
-
     result = refine.generate_variants(
         GenerateVariantsRequest(
             specVersion="itl.ui/v1",
@@ -131,3 +131,106 @@ def test_explicit_recipe_centroid_is_opt_in_and_preserves_keeps(tmp_path: Path) 
         variant.spec["elements"]["continue-button"]["props"]["appearance"]["recipe"] == "primary"
         for variant in result.variants
     )
+
+
+def test_live_provider_candidates_are_used_when_they_are_valid_and_distinct(tmp_path: Path) -> None:
+    class ModelProvider:
+        def generate_candidate_patches(self, request, evidence, policies, repair_feedback=None):
+            return json.dumps(
+                {
+                    "candidates": [
+                        {
+                            "kind": "exploit",
+                            "patch": {
+                                "changes": [{"path": "/appearance/radius", "value": "square"}],
+                                "rationale": "model radius",
+                            },
+                        },
+                        {
+                            "kind": "adjacent_explore",
+                            "patch": {
+                                "changes": [{"path": "/appearance/density", "value": "compact"}],
+                                "rationale": "model density",
+                            },
+                        },
+                    ]
+                }
+            )
+
+    request = GenerateVariantsRequest(
+        specVersion="itl.ui/v1",
+        spec=button_spec(),
+        targetElementId="continue-button",
+        interpretation=Interpretation(
+            targetElementId="continue-button",
+            evidence=PreferenceEvidence(lockedPaths=["/appearance/recipe"]),
+            directives=[
+                {"kind": "keep", "path": "/appearance/recipe"},
+                {"kind": "explore", "path": "/appearance/radius"},
+            ],
+            rationale="Keep the recipe and explore shape.",
+        ),
+        context=context("hero"),
+    )
+    refine = RefineService(PreferenceRepository(tmp_path / "preferences.sqlite"), ModelProvider())
+
+    result = refine.generate_variants(request)
+
+    assert [variant.id for variant in result.variants] == ["exploit-1", "adjacent-explore-1"]
+    assert [variant.direction for variant in result.variants] == ["model radius", "model density"]
+
+
+def test_invalid_candidate_patches_are_repaired_once_before_rendering(tmp_path: Path) -> None:
+    class RepairingProvider:
+        calls = 0
+
+        def generate_candidate_patches(self, request, evidence, policies, repair_feedback=None):
+            self.calls += 1
+            value = "ghost" if repair_feedback is None else "primary"
+            return json.dumps(
+                {
+                    "candidates": [
+                        {
+                            "kind": "exploit",
+                            "patch": {
+                                "changes": [
+                                    {"path": "/appearance/recipe", "value": value},
+                                    {"path": "/appearance/density", "value": "compact"},
+                                ],
+                                "rationale": "repairable recipe proposal",
+                            },
+                        },
+                        {
+                            "kind": "adjacent_explore",
+                            "patch": {
+                                "changes": [{"path": "/appearance/radius", "value": "square"}],
+                                "rationale": "repairable radius proposal",
+                            },
+                        },
+                    ]
+                }
+            )
+
+    provider = RepairingProvider()
+    request = GenerateVariantsRequest(
+        specVersion="itl.ui/v1",
+        spec=button_spec(),
+        targetElementId="continue-button",
+        interpretation=Interpretation(
+            targetElementId="continue-button",
+            evidence=PreferenceEvidence(lockedPaths=["/appearance/recipe"]),
+            directives=[
+                {"kind": "keep", "path": "/appearance/recipe"},
+                {"kind": "explore", "path": "/appearance/radius"},
+            ],
+            rationale="Keep the recipe and explore shape.",
+        ),
+        context=context("hero"),
+    )
+
+    result = RefineService(PreferenceRepository(tmp_path / "preferences.sqlite"), provider).generate_variants(request)
+
+    assert provider.calls == 2
+    appearance = result.variants[0].spec["elements"]["continue-button"]["props"]["appearance"]
+    assert appearance["recipe"] == "primary"
+    assert appearance["density"] == "compact"

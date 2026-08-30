@@ -3,8 +3,10 @@ import { expect, test } from "vitest";
 
 import Home from "./page";
 
-test("renders the empty application shell", () => {
-  render(<Home />);
+test("renders the English application shell", async () => {
+  render(await Home({
+    params: Promise.resolve({ locale: "en" }),
+  }));
 
   expect(screen.getByRole("main")).toBeDefined();
 });

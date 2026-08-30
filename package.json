@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev:web": "pnpm --filter @itl/web dev",
-    "dev:ai": "uv --directory apps/ai run uvicorn itl_ai.main:app --reload",
+    "dev:ai": "uv --directory apps/ai run uvicorn --env-file .env itl_ai.main:app --reload",
     "lint": "pnpm --filter @itl/web lint && uv --directory apps/ai run ruff check .",
     "typecheck": "pnpm --filter @itl/web typecheck && uv --directory apps/ai run pyright",
     "test": "pnpm --filter @itl/web test && uv --directory apps/ai run pytest",

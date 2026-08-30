@@ -17,7 +17,8 @@ afterEach(cleanup);
 afterEach(() => vi.unstubAllGlobals());
 
 function installRefineApi() {
-  vi.stubGlobal("fetch", vi.fn(async (input: string) => {
+  const fetchMock = vi.fn(async (input: string, _init?: RequestInit) => {
+    void _init;
     if (input.endsWith("/v1/refine/parse-critique")) {
       return new Response(JSON.stringify({
         interpretation: {
@@ -47,7 +48,9 @@ function installRefineApi() {
       }));
     }
     return new Response(JSON.stringify({ id: 1, createdAt: "2026-01-01T00:00:00Z" }));
-  }));
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
 }
 
 test("ui.valid_spec_renders_deterministically", () => {
@@ -110,16 +113,32 @@ test("ui.generated_props_are_constrained_to_coherent_recipes", () => {
 });
 
 test("button.web_uses_api_and_typed_context", async () => {
-  installRefineApi();
-  render(<ControlledCanvas />);
+  const fetchMock = installRefineApi();
+  render(<ControlledCanvas locale="en" />);
+  expect(screen.getByRole("region", { name: "Preview" })).toBeDefined();
   expect(screen.getByRole("region", { name: "hero Button surface" })).toBeDefined();
   fireEvent.click(screen.getByRole("button", { name: "toolbar" }));
   expect(screen.getByRole("region", { name: "toolbar Button surface" })).toBeDefined();
   fireEvent.click(screen.getByRole("button", { name: "form" }));
   expect(screen.getByRole("region", { name: "form Button surface" })).toBeDefined();
-  fireEvent.change(screen.getByLabelText("Optional critique"), { target: { value: "It is too rounded." } });
+  fireEvent.change(screen.getByLabelText("Critique"), { target: { value: "It is too rounded." } });
   fireEvent.click(screen.getByRole("button", { name: "Review interpretation" }));
   expect(await screen.findByRole("region", { name: "Review refinement interpretation" })).toBeDefined();
+  expect(screen.getByRole("separator", { name: "Review feedback" })).toBeDefined();
+  expect(screen.getAllByRole("checkbox")).toHaveLength(5);
   fireEvent.click(screen.getByRole("button", { name: "Generate constrained alternatives" }));
   expect(await screen.findByRole("region", { name: "Constrained alternatives" })).toBeDefined();
+  expect(screen.getAllByRole("region", { name: "form Button surface" })).toHaveLength(3);
+  const preferenceRequest = fetchMock.mock.calls.find(([url]) => String(url).endsWith("/v1/preference-events"));
+  expect(preferenceRequest).toBeDefined();
+  const requestBody = JSON.parse(String(preferenceRequest?.[1]?.body)) as Record<string, unknown>;
+  expect(requestBody).not.toHaveProperty("interpretation");
+  expect(requestBody).toHaveProperty("parserInterpretation");
+});
+
+test("button.web_does_not_submit_an_empty_critique", () => {
+  installRefineApi();
+  render(<ControlledCanvas locale="en" />);
+
+  expect(screen.getByRole("button", { name: "Review interpretation" })).toHaveProperty("disabled", true);
 });

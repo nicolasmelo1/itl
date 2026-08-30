@@ -14,6 +14,25 @@
   width: min(100%, 72rem);
 }
 
+.reviewedUi {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.sectionHeading {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.sectionHeading strong {
+  font-size: 1rem;
+}
+
+.sectionHeading p {
+  color: #5f6470;
+  margin: 0;
+}
+
 .currentSpec {
   align-items: center;
   background: #fff;
@@ -81,10 +100,29 @@
 }
 
 .panel h1,
+.panel h2,
 .intentReview h2,
 .variants h2 {
   font-size: 1rem;
   margin: 0;
+}
+
+.reviewDivider {
+  align-items: center;
+  color: #5f6470;
+  display: flex;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  gap: 0.75rem;
+  text-transform: uppercase;
+}
+
+.reviewDivider::before,
+.reviewDivider::after {
+  background: #d8dbe2;
+  content: "";
+  height: 1px;
+  flex: 1;
 }
 
 .reactions,
@@ -129,14 +167,48 @@
 }
 
 .primaryAction {
+  align-items: center;
   background: #242832;
   border: 0;
   border-radius: 0.5rem;
   color: #fff;
   cursor: pointer;
+  display: inline-flex;
+  gap: 0.5rem;
+  justify-content: center;
   min-height: 2.5rem;
   padding: 0.5rem 0.875rem;
   width: fit-content;
+}
+
+.primaryAction:disabled {
+  background: #69707d;
+  cursor: progress;
+  opacity: 0.85;
+}
+
+.variantsHeading button:disabled {
+  background: #e7e9ee;
+  color: #69707d;
+  cursor: progress;
+}
+
+.loadingSpinner {
+  animation: spin 0.7s linear infinite;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  display: inline-block;
+  height: 0.875rem;
+  width: 0.875rem;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loadingSpinner { animation-duration: 1.8s; }
 }
 
 .inspector,
@@ -187,11 +259,47 @@
   padding: 0.75rem;
 }
 
+.variant .currentSpec {
+  box-sizing: border-box;
+  max-width: none;
+  min-height: 7.5rem;
+  width: 100%;
+}
+
 .variantKind {
   color: #5f6470;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.75rem;
   margin: 0;
+}
+
+.variantChanges {
+  border-left: 3px solid #4f46e5;
+  color: #3f4654;
+  font-size: 0.8125rem;
+  padding-left: 0.65rem;
+}
+
+.variantChanges strong {
+  display: block;
+  margin-bottom: 0.3rem;
+}
+
+.variantChanges ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.65rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.variantChanges li {
+  background: #e0e7ff;
+  border-radius: 999px;
+  color: #312e81;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  padding: 0.2rem 0.45rem;
 }
 
 .rejectAll {

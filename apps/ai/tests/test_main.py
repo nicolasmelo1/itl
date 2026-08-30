@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 import itl_ai.main as main
 from itl_ai.memory.repository import PreferenceRepository
 from itl_ai.refine.catalog import VISUAL_VALUES
+from itl_ai.refine.providers import ProviderUnavailableError
 from itl_ai.refine.service import RefineService
 
 client = TestClient(main.app)
@@ -134,3 +135,66 @@ def test_candidate_acceptance_keeps_candidate_identity_separate_from_element_ide
     )
     assert response.status_code == 200
     assert response.json()["id"] == 1
+
+
+def test_provider_timeout_returns_unavailable_for_candidates_but_keeps_parse_fallback(tmp_path) -> None:
+    class UnavailableProvider:
+        def generate_spec(self, prompt: str) -> str:
+            raise ProviderUnavailableError("timed out")
+
+        def parse_critique(self, request) -> str:
+            raise ProviderUnavailableError("timed out")
+
+        def generate_candidate_patches(self, request, evidence, policies, repair_feedback=None) -> str:
+            raise ProviderUnavailableError("timed out")
+
+    main.refine_service = RefineService(PreferenceRepository(tmp_path / "preferences.sqlite"), UnavailableProvider())
+    parse_response = client.post(
+        "/v1/refine/parse-critique",
+        json={
+            "specVersion": "itl.ui/v1",
+            "spec": button_spec(),
+            "targetElementId": "continue-button",
+            "critique": "Too rounded.",
+        },
+    )
+    variants_response = client.post(
+        "/v1/refine/generate-variants",
+        json={
+            "specVersion": "itl.ui/v1",
+            "spec": button_spec(),
+            "targetElementId": "continue-button",
+            "interpretation": interpretation(),
+            "context": context,
+        },
+    )
+
+    assert parse_response.status_code == 200
+    assert parse_response.json()["interpretation"]["directives"]
+    assert variants_response.status_code == 503
+    assert variants_response.json()["code"] == "provider_unavailable"
+
+
+def test_parse_critique_accepts_a_provider_interpretation_wrapper(tmp_path) -> None:
+    class WrappedInterpretationProvider:
+        def parse_critique(self, request) -> str:
+            return json.dumps({"interpretation": interpretation()})
+
+        def generate_candidate_patches(self, request, evidence, policies, repair_feedback=None) -> None:
+            return None
+
+    main.refine_service = RefineService(
+        PreferenceRepository(tmp_path / "preferences.sqlite"), WrappedInterpretationProvider()
+    )
+    response = client.post(
+        "/v1/refine/parse-critique",
+        json={
+            "specVersion": "itl.ui/v1",
+            "spec": button_spec(),
+            "targetElementId": "continue-button",
+            "critique": "Too rounded.",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["interpretation"]["targetElementId"] == "continue-button"

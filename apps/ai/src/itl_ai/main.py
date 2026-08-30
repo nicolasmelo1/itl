@@ -24,7 +24,7 @@ from itl_ai.refine.models import (
     PreferenceEventRequest,
     PreferenceEventResponse,
 )
-from itl_ai.refine.providers import configured_provider
+from itl_ai.refine.providers import ProviderUnavailableError, configured_provider
 from itl_ai.refine.service import RefineService
 
 app = FastAPI(title="ITL AI API", version="0.1.0")
@@ -79,6 +79,18 @@ async def refine_validation_error(_: Request, error: RefineValidationError) -> J
             message=error.message,
             issues=error.issues,
             recoverable=True,
+        ).model_dump(),
+    )
+
+
+@app.exception_handler(ProviderUnavailableError)
+async def provider_unavailable_error(_: Request, __: ProviderUnavailableError) -> JSONResponse:
+    """Keep provider outages from becoming stack-trace 500 responses."""
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content=ErrorResponse(
+            code="provider_unavailable",
+            message="The configured model provider did not respond. Please try again.",
         ).model_dump(),
     )
 

@@ -9,12 +9,13 @@ from pydantic import ValidationError
 from itl_ai.memory.repository import PreferenceRepository
 from itl_ai.refine.catalog import (
     RefineValidationError,
-    create_variants,
+    apply_and_validate_candidate_patch,
     should_include_adjacent,
     validate_interpretation,
     validate_ui_spec,
 )
 from itl_ai.refine.models import (
+    CandidateProposal,
     DesignContext,
     GenerateSpecRequest,
     GenerateSpecResponse,
@@ -29,8 +30,9 @@ from itl_ai.refine.models import (
     PreferenceEventResponse,
     PreferenceEvidence,
     RetrievedEvidence,
+    Variant,
 )
-from itl_ai.refine.providers import DeterministicRefineProvider, RefineProvider
+from itl_ai.refine.providers import DeterministicRefineProvider, ProviderUnavailableError, RefineProvider
 
 
 class RefineService:
@@ -48,21 +50,10 @@ class RefineService:
 
     def parse_critique(self, request: ParseCritiqueRequest) -> ParseCritiqueResponse:
         validate_ui_spec(request.spec)
-        raw = _decode_json(self.provider.parse_critique(request))
         try:
-            interpretation = Interpretation.model_validate(raw)
-        except ValidationError as exc:
-            raise RefineValidationError(
-                "invalid_model_output",
-                "The refinement response could not be safely interpreted. The current spec was retained.",
-                [
-                    ModelIssue(
-                        code="invalid_interpretation",
-                        message="The provider did not return the required contextual interpretation fields.",
-                    )
-                ],
-            ) from exc
-        validate_interpretation(interpretation, request.targetElementId)
+            interpretation = _validated_interpretation(self.provider.parse_critique(request), request)
+        except (ProviderUnavailableError, RefineValidationError):
+            interpretation = _validated_interpretation(DeterministicRefineProvider().parse_critique(request), request)
         return ParseCritiqueResponse(interpretation=interpretation)
 
     def generate_variants(self, request: GenerateVariantsRequest) -> GenerateVariantsResponse:
@@ -72,13 +63,15 @@ class RefineService:
         adjacent_count = counts.get("adjacent_explore", 0)
         exploit_count = counts.get("exploit", 0)
         include_adjacent = should_include_adjacent(adjacent_count, exploit_count)
-        variants = create_variants(
-            request.spec,
-            request.targetElementId,
-            request.interpretation,
-            request.includeWild,
-            include_adjacent,
-        )
+        policies = _candidate_policies(request, include_adjacent)
+        try:
+            raw_candidates = self.provider.generate_candidate_patches(request, evidence, policies)
+            variants = validate_and_materialize_candidates(raw_candidates, request, policies)
+        except RefineValidationError as first_error:
+            raw_candidates = self.provider.generate_candidate_patches(
+                request, evidence, policies, _repair_feedback(first_error)
+            )
+            variants = validate_and_materialize_candidates(raw_candidates, request, policies)
         output_id = _output_id("variants")
         evidence_ids = [item.id for item in evidence]
         for variant in variants:
@@ -129,3 +122,101 @@ def _decode_json(raw: str) -> dict[str, object]:
             [ModelIssue(code="invalid_json_shape", message="Expected a JSON object from the provider.")],
         )
     return cast(dict[str, object], decoded)
+
+
+def validate_and_materialize_candidates(
+    raw: str | None, request: GenerateVariantsRequest, policies: list[str]
+) -> list[Variant]:
+    """Materialize untrusted model patches only after catalog and directive validation."""
+    try:
+        if raw is None:
+            raise ValueError("The provider did not return candidate patches.")
+        decoded = _decode_json(raw)
+        raw_candidates = decoded.get("candidates")
+        if not isinstance(raw_candidates, list):
+            raise ValueError("The model did not return a candidates array.")
+        proposals = [CandidateProposal.model_validate(item) for item in cast(list[object], raw_candidates)]
+        by_kind = {proposal.kind: proposal for proposal in proposals}
+        if len(proposals) != len(policies) or set(by_kind) != set(policies):
+            raise ValueError("The model returned an unexpected candidate set.")
+        ordered = [by_kind[kind] for kind in policies]
+        signatures = {_appearance_signature(request.spec, request.targetElementId)}
+        materialized: list[Variant] = []
+        for proposal in ordered:
+            spec = apply_and_validate_candidate_patch(
+                request.spec, request.targetElementId, request.interpretation, proposal.patch
+            )
+            signature = _appearance_signature(spec, request.targetElementId)
+            if signature in signatures:
+                raise ValueError("The model returned a duplicate or unchanged candidate.")
+            signatures.add(signature)
+            materialized.append(
+                Variant(
+                    id=_canonical_variant_id(proposal.kind),
+                    kind=proposal.kind,
+                    direction=proposal.patch.rationale,
+                    spec=spec,
+                )
+            )
+        return materialized
+    except RefineValidationError:
+        raise
+    except (ValidationError, ValueError) as exc:
+        raise RefineValidationError(
+            "invalid_candidate_patch",
+            "The model proposed invalid candidate patches. The current spec was retained.",
+            [ModelIssue(code="invalid_candidate_patch", message=str(exc))],
+        ) from exc
+
+
+def _candidate_policies(request: GenerateVariantsRequest, include_adjacent: bool) -> list[str]:
+    policies = ["exploit"]
+    if include_adjacent:
+        policies.append("adjacent_explore")
+    if request.includeWild:
+        policies.append("wild_explore")
+    return policies
+
+
+def _repair_feedback(error: RefineValidationError) -> str:
+    return json.dumps(
+        {
+            "message": "Repair the rejected proposal. Return a complete replacement candidates array only.",
+            "rejection": error.message,
+            "issues": [issue.model_dump() for issue in error.issues],
+        },
+        separators=(",", ":"),
+    )
+
+
+def _appearance_signature(spec: object, target_element_id: str) -> tuple[tuple[str, object], ...]:
+    validated = validate_ui_spec(spec)
+    elements = cast(dict[str, object], validated["elements"])
+    element = cast(dict[str, object], elements[target_element_id])
+    props = cast(dict[str, object], element["props"])
+    appearance = cast(dict[str, object], props["appearance"])
+    return tuple(sorted(appearance.items()))
+
+
+def _canonical_variant_id(kind: str) -> str:
+    return f"{kind.replace('_', '-')}-1"
+
+
+def _validated_interpretation(raw: str, request: ParseCritiqueRequest) -> Interpretation:
+    decoded = _decode_json(raw)
+    candidate = decoded.get("interpretation", decoded)
+    try:
+        interpretation = Interpretation.model_validate(candidate)
+    except ValidationError as exc:
+        raise RefineValidationError(
+            "invalid_model_output",
+            "The refinement response could not be safely interpreted. The current spec was retained.",
+            [
+                ModelIssue(
+                    code="invalid_interpretation",
+                    message="The provider did not return the required contextual interpretation fields.",
+                )
+            ],
+        ) from exc
+    validate_interpretation(interpretation, request.targetElementId)
+    return interpretation

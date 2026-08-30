@@ -49,23 +49,23 @@ Open `http://localhost:3000`.
 4. Adjust Keep/Explore if necessary and click **Generate constrained alternatives**. This confirms the critique and persists `confirmed_critique`; a parser result alone is never stored as evidence.
 5. Accept an option, reject all, or give attribute feedback. An accepted variant is stored as `candidate_acceptance`; its candidate ID is separate from the UI element ID.
 
-The browser sends interpretation and variant generation to FastAPI. TypeScript owns rendering and validates every returned spec before it is shown. The API owns the deterministic candidate policy and the SQLite memory boundary.
+The browser sends interpretation and variant generation to FastAPI. TypeScript owns rendering and validates every returned spec before it is shown. A model proposes catalog-scoped patches; the API applies and validates them deterministically, then owns the SQLite memory boundary. The current spec is never mutated until the user accepts a rendered candidate.
 
 ## How it works
 
 ```text
-Button spec → critique → review → FastAPI interpretation → candidates → explicit event → SQLite evidence
-                                      │                                  │
-                                      └──── deterministic validation ─────┘
+Button spec → critique → review → model candidate patches → deterministic materialization → candidates → explicit event
+                                     │                         │                                  │
+                                     └── context + evidence ───┴──────── deterministic validation ──┘
 ```
 
-- The editable vocabulary is finite and visual only. A coherent recipe derives background, foreground, border, hover, and focus tokens together; arbitrary CSS, colors, content, state, and unregistered components are rejected.
+- The editable vocabulary is finite and visual only. The model chooses combinations from the Button catalog, but cannot provide CSS, colors, content, semantic state, or unregistered components. Every patch is checked for schema, catalog values, directives, locks, untouched content/state, and duplicate candidates before rendering.
 - A raw event is never overwritten. Direct edits have stronger evidence than an inferred critique.
 - Context is retained as role, surface, and density. Retrieval independently reports exact/compatible/global/mismatch context and supporting/conflicting/unknown preference relations.
 
 ## Optional model providers
 
-Set provider values in `apps/ai/.env`; restart `pnpm dev:ai` after changing them. Never put provider keys in `apps/web/.env.local`, commit them, or expose them with a `NEXT_PUBLIC_` variable. The application starts safely in deterministic mode if no provider is configured.
+Set provider values in `apps/ai/.env`; restart `pnpm dev:ai` after changing them. Never put provider keys in `apps/web/.env.local`, commit them, or expose them with a `NEXT_PUBLIC_` variable. The application starts safely in fixture mode if no provider is configured. That mode exists for local UI/API development; configure a model provider to dogfood creative alternative generation.
 
 ### Ollama Cloud
 
@@ -76,6 +76,7 @@ ITL_LLM_PROVIDER=ollama
 OLLAMA_API_KEY=your_ollama_key
 OLLAMA_BASE_URL=https://ollama.com/v1
 OLLAMA_MODEL=gpt-oss:120b-cloud
+LLM_TIMEOUT_SECONDS=120
 ```
 
 Choose a cloud model enabled on your Ollama account. See Ollama's [Cloud API guide](https://docs.ollama.com/cloud) and [OpenAI-compatibility reference](https://docs.ollama.com/api/openai-compatibility).

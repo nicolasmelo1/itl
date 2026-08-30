@@ -3,12 +3,23 @@ import { buttonFixtureSpec } from "@itl/ui-catalog";
 
 test("the contextual canvas exposes one editable Button in each static surface", async ({ page }) => {
   await page.goto("/");
+  await expect(page).toHaveURL(/\/en$/);
   await expect(page.getByRole("region", { name: "hero Button surface" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Continue" })).toBeEnabled();
   await page.getByRole("button", { name: "toolbar" }).click();
   await expect(page.getByRole("region", { name: "toolbar Button surface" })).toBeVisible();
   await page.getByRole("button", { name: "form" }).click();
   await expect(page.getByRole("region", { name: "form Button surface" })).toBeVisible();
+});
+
+test("the root route selects Brazilian Portuguese from the browser language", async ({ browser }) => {
+  const context = await browser.newContext({ locale: "pt-BR" });
+  const page = await context.newPage();
+  await page.goto("/");
+
+  await expect(page).toHaveURL(/\/pt-BR$/);
+  await expect(page.getByText("Pré-visualização")).toBeVisible();
+  await context.close();
 });
 
 test("a critique stays transient until its contextual interpretation is confirmed", async ({ page }) => {
@@ -47,12 +58,13 @@ test("a critique stays transient until its contextual interpretation is confirme
       body: JSON.stringify({ id: 1, createdAt: "2026-01-01T00:00:00Z" }),
     });
   });
-  await page.goto("/");
-  await page.getByLabel("Optional critique").fill("It is too rounded.");
+  await page.goto("/en");
+  await page.getByLabel("Critique").fill("It is too rounded.");
   await page.getByRole("button", { name: "Review interpretation" }).click();
   await expect(page.getByRole("region", { name: "Review refinement interpretation" })).toBeVisible();
   expect(recordedActions).toEqual([]);
   await page.getByRole("button", { name: "Generate constrained alternatives" }).click();
   await expect(page.getByText("exploit: directive-led refinement")).toBeVisible();
+  await expect(page.getByRole("region", { name: "hero Button surface" })).toHaveCount(2);
   expect(recordedActions).toContain("confirmed_critique");
 });
