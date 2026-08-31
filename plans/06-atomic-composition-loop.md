@@ -110,10 +110,16 @@ Retrieval has two separate responsibilities:
   indifferent, or manually edited. They are passed to the brief; they must not
   be collapsed into a single positive “score”.
 
-An explicit attribute comment and a candidate acceptance may have different
-source confidence, but an `almost` event must not become stronger than an
-acceptance merely because of a source-weight accident. Tests cover that
-relevance and polarity are independently preserved, including a highly
+Formally, ranking determines relevance and never preference polarity:
+
+```text
+R(event, query) = relevance(event, query)
+P(event) = accepted | almost | rejected | indifferent | manual_edit
+```
+
+A highly relevant `almost` or `rejected` event may rank above a less relevant
+`accepted` event while retaining its original outcome semantics. Tests cover
+that relevance and polarity are independently preserved, including a highly
 relevant rejection.
 
 ## Implementation sequence
@@ -204,12 +210,16 @@ Compare at least:
 
 | Baseline | Conditioning |
 | --- | --- |
-| A | LLM without memory |
-| B | Most recent preference only |
-| ITL | Contextual, scoped TasteBrief |
+| A — No memory | LLM without memory. |
+| B — Last relevant preference | Most recent preference with compatible scope and context. |
+| C — Raw retrieval | Top-_k_ relevant `RetrievedEvidence` items passed directly to the model, without a TasteBrief. This evaluation-only baseline runs in an isolated harness and never broadens the production provider boundary. |
+| ITL — Structured TasteBrief | Contextual, scoped, minimized TasteBrief. |
 
 Evaluate held-out sessions by context (`hero`, `form`, `toolbar`, `dashboard`)
 and later by Atomic level. Record acceptance rate, pairwise win rate, top-1
 preference hit rate, regret/rejected-candidate rate, constraint violations,
-and diversity. Only a positive held-out result justifies prompt optimization,
-DSPy compilation, or GEPA.
+and diversity. Interpret the key comparison explicitly: `ITL > C > A` shows
+that retrieval helps and that the structured representation helps beyond raw
+memory; `ITL ≈ C > A` shows that the brief adds auditability and safety without
+measurable predictive lift. Only a positive held-out result justifies prompt
+optimization, DSPy compilation, or GEPA.
