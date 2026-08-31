@@ -14,7 +14,7 @@ a global rule.
 | 3 | [03-critique-refine-loop.md](03-critique-refine-loop.md) — implement generate, critique, locks, and local variation | A user can preserve liked button attributes, change a disliked one, and reject all alternatives without an A/B choice. |
 | 4 | [04-memory-exploration-validation.md](04-memory-exploration-validation.md) — persist evidence and validate safe exploration | A later generation uses relevant prior evidence, records exploration separately, and passes the MVP evaluation suite. |
 | 5 | [05-button-contextual-lab.md](05-button-contextual-lab.md) — make Button a contextual, semantic preference laboratory | Directives, recipes, typed contexts, and one web→API refinement path are proven before another editable component exists. |
-| 6 | [06-atomic-composition-loop.md](06-atomic-composition-loop.md) — build the full Atomic Design system and learning loop | Every layer, from foundations through pages, has a controlled catalog and only relevant evidence carries upward. |
+| 6 | [06-atomic-composition-loop.md](06-atomic-composition-loop.md) — build an Atomic vertical slice and contextual Taste Loop | One registered settings-page slice proves scoped retrieval, outcome-preserving TasteBriefs, and provider-bounded generation. |
 
 ## Parked
 
@@ -22,4 +22,5 @@ a global rule.
 | --- | --- |
 | Learned prompt compiler or production personalization | Several completed, reviewed composition sessions plus a held-out human evaluation set. |
 | GEPA compilation of DSPy modules | A held-out labelled dataset and a task-specific deterministic or human-grounded metric. |
+| Held-out taste-loop evaluation | Completion of Plan 06’s scoped, provider-bounded feedback loop and enough human-reviewed sessions. |
 | VLM visual judging and visual regression baselines | A stable component catalog plus a decision about the target browser/CI runner. |
