@@ -6,9 +6,22 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal, cast
+from typing import Literal, TypeAlias, cast
 
-from itl_ai.refine.models import DesignContext, PreferenceEventRequest, PreferenceEvidence, RetrievedEvidence, SpecDiff
+from pydantic import TypeAdapter, ValidationError
+
+from itl_ai.refine.models import (
+    DEFAULT_BUTTON_SCOPE,
+    AtomicScope,
+    AttributeDirective,
+    ButtonAppearance,
+    DesignContext,
+    Interpretation,
+    PreferenceEventRequest,
+    PreferenceEvidence,
+    RetrievedEvidence,
+    SpecDiff,
+)
 
 SOURCE_CONFIDENCE = {
     "manual_edit": 60,
@@ -20,6 +33,15 @@ SOURCE_CONFIDENCE = {
     "model_inference": 10,
 }
 STRENGTH_SCORE = {"weak": 10, "moderate": 30, "strong": 50}
+DIRECTIVES_ADAPTER = TypeAdapter(list[AttributeDirective])
+TasteOutcome: TypeAlias = Literal["accepted", "almost", "rejected", "indifferent", "manual_edit"]
+OUTCOMES: dict[str, TasteOutcome] = {
+    "candidate_acceptance": "accepted",
+    "almost": "almost",
+    "rejection": "rejected",
+    "indifference": "indifferent",
+    "manual_edit": "manual_edit",
+}
 
 
 class PreferenceRepository:
@@ -89,10 +111,15 @@ class PreferenceRepository:
                 "evidence_json": "ALTER TABLE preference_events ADD COLUMN evidence_json TEXT",
                 "directives_json": "ALTER TABLE preference_events ADD COLUMN directives_json TEXT",
                 "spec_diff_json": "ALTER TABLE preference_events ADD COLUMN spec_diff_json TEXT",
+                "atomic_level": "ALTER TABLE preference_events ADD COLUMN atomic_level TEXT",
+                "scope_json": "ALTER TABLE preference_events ADD COLUMN scope_json TEXT",
             }
             for column, statement in migrations.items():
                 if column not in columns:
                     connection.execute(statement)
+            audit_columns = {row["name"] for row in connection.execute("PRAGMA table_info(generation_audits)")}
+            if "brief_version" not in audit_columns:
+                connection.execute("ALTER TABLE generation_audits ADD COLUMN brief_version TEXT")
             connection.execute(
                 "CREATE INDEX IF NOT EXISTS preference_events_retrieval_context "
                 "ON preference_events(component_type, created_at DESC)"
@@ -101,7 +128,7 @@ class PreferenceRepository:
                 "CREATE INDEX IF NOT EXISTS generation_audits_session ON generation_audits(session_id, created_at DESC)"
             )
             connection.execute(
-                "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (2, CURRENT_TIMESTAMP)"
+                "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (4, CURRENT_TIMESTAMP)"
             )
 
     def add_event(self, event: PreferenceEventRequest) -> tuple[int, datetime]:
@@ -113,15 +140,18 @@ class PreferenceRepository:
             cursor = connection.execute(
                 """
                 INSERT INTO preference_events (
-                    session_id, component_type, context, context_json, target_element_id, action, source,
+                    session_id, component_type, atomic_level, scope_json, context, context_json,
+                    target_element_id, action, source,
                     before_snapshot_id, after_snapshot_id, selected_element_id, candidate_id,
                     liked_paths_json, disliked_paths_json, locked_paths_json, evidence_json, directives_json,
                     spec_diff_json, critique, parser_interpretation_json, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     event.sessionId,
                     event.componentType,
+                    event.scope.level,
+                    _json(event.scope.model_dump()),
                     event.context.surface,
                     _json(event.context.model_dump()),
                     event.targetElementId,
@@ -151,19 +181,30 @@ class PreferenceRepository:
         component_type: str,
         context: DesignContext,
         query_evidence: PreferenceEvidence,
+        scope: AtomicScope = DEFAULT_BUTTON_SCOPE,
         limit: int = 6,
     ) -> list[RetrievedEvidence]:
         with self._connection() as connection:
             rows = connection.execute(
                 """
-                SELECT id, context_json, context, source, evidence_json, liked_paths_json, disliked_paths_json,
-                       locked_paths_json, critique
-                FROM preference_events WHERE component_type = ? ORDER BY id DESC
+                SELECT preference_events.id, preference_events.atomic_level, preference_events.scope_json,
+                       preference_events.context_json, preference_events.context,
+                       preference_events.source, preference_events.action, preference_events.evidence_json,
+                       preference_events.liked_paths_json, preference_events.disliked_paths_json,
+                       preference_events.locked_paths_json, preference_events.critique,
+                       preference_events.candidate_id, preference_events.directives_json,
+                       preference_events.spec_diff_json, preference_events.parser_interpretation_json,
+                       preference_events.target_element_id, after_snapshot.spec_json AS after_snapshot_json
+                FROM preference_events
+                LEFT JOIN spec_snapshots AS after_snapshot
+                  ON after_snapshot.id = preference_events.after_snapshot_id
+                WHERE preference_events.component_type = ?
+                ORDER BY preference_events.id DESC
                 """,
                 (component_type,),
             ).fetchall()
 
-        scored = [_retrieval_row(row, context, query_evidence) for row in rows]
+        scored = [_retrieval_row(row, context, query_evidence, scope) for row in rows]
         scored.sort(key=lambda item: (item[0], item[1]), reverse=True)
         selected = scored[:limit]
         mismatch = next((item for item in scored if item[2].contextRelation == "mismatch"), None)
@@ -172,14 +213,28 @@ class PreferenceRepository:
         return [item[2] for item in selected]
 
     def record_generation(
-        self, output_id: str, session_id: str, output_kind: str, evidence_ids: list[int], policy: str | None
+        self,
+        output_id: str,
+        session_id: str,
+        output_kind: str,
+        evidence_ids: list[int],
+        policy: str | None,
+        brief_version: str | None = None,
     ) -> None:
         with self._connection() as connection:
             connection.execute(
                 """INSERT INTO generation_audits(
-                       output_id, session_id, output_kind, policy, evidence_ids_json, created_at
-                   ) VALUES (?, ?, ?, ?, ?, ?)""",
-                (output_id, session_id, output_kind, policy, _json(evidence_ids), datetime.now(UTC).isoformat()),
+                       output_id, session_id, output_kind, policy, evidence_ids_json, brief_version, created_at
+                   ) VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    output_id,
+                    session_id,
+                    output_kind,
+                    policy,
+                    _json(evidence_ids),
+                    brief_version,
+                    datetime.now(UTC).isoformat(),
+                ),
             )
 
     def policy_counts(self, session_id: str) -> dict[str, int]:
@@ -201,6 +256,13 @@ class PreferenceRepository:
         decoded = json.loads(str(row["evidence_ids_json"]))
         return [item for item in decoded if isinstance(item, int)]
 
+    def brief_version_for_output(self, output_id: str) -> str | None:
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT brief_version FROM generation_audits WHERE output_id = ?", (output_id,)
+            ).fetchone()
+        return str(row["brief_version"]) if row and row["brief_version"] is not None else None
+
     @staticmethod
     def _snapshot_id(connection: sqlite3.Connection, spec: dict[str, object], created_at: datetime) -> int:
         encoded = _json(spec)
@@ -215,9 +277,10 @@ class PreferenceRepository:
 
 
 def _retrieval_row(
-    row: sqlite3.Row, context: DesignContext, query_evidence: PreferenceEvidence
+    row: sqlite3.Row, context: DesignContext, query_evidence: PreferenceEvidence, requested_scope: AtomicScope
 ) -> tuple[int, int, RetrievedEvidence]:
     stored_context = _decode_context(row["context_json"])
+    stored_scope = _decode_scope(row["scope_json"], row["atomic_level"])
     stored_evidence = _decode_evidence(row)
     context_relation = _context_relation(context, stored_context)
     preference_relation = _preference_relation(query_evidence, stored_evidence)
@@ -226,15 +289,23 @@ def _retrieval_row(
         + STRENGTH_SCORE[stored_evidence.strength]
         + {"exact": 120, "compatible": 70, "global": 25, "mismatch": 0}[context_relation]
         + {"supporting": 30, "unknown": 0, "conflicting": -20}[preference_relation]
+        + _scope_score(requested_scope, stored_scope)
     )
     evidence = RetrievedEvidence(
         id=row["id"],
         contextRelation=context_relation,
         preferenceRelation=preference_relation,
         source=row["source"],
+        scope=stored_scope,
         context=stored_context,
         evidence=stored_evidence,
         critique=row["critique"],
+        outcome=_outcome(row["action"]),
+        observedAppearance=_decode_observed_appearance(row["after_snapshot_json"], row["target_element_id"]),
+        diff=_decode_diff(row["spec_diff_json"]),
+        candidateId=row["candidate_id"],
+        directives=_decode_directives(row["directives_json"]),
+        parserInterpretation=_decode_interpretation(row["parser_interpretation_json"]),
     )
     return score, int(row["id"]), evidence
 
@@ -248,6 +319,27 @@ def _decode_context(value: str | None) -> DesignContext | None:
         return None
 
 
+def _decode_scope(value: str | None, atomic_level: str | None) -> AtomicScope | None:
+    if value:
+        try:
+            return AtomicScope.model_validate_json(value)
+        except ValueError:
+            return None
+    if atomic_level == "atom":
+        return DEFAULT_BUTTON_SCOPE
+    return None
+
+
+def _scope_score(requested: AtomicScope, stored: AtomicScope | None) -> int:
+    if stored is None:
+        return 0
+    if stored == requested:
+        return 80
+    if stored.level == requested.level:
+        return 25
+    return -15
+
+
 def _decode_evidence(row: sqlite3.Row) -> PreferenceEvidence:
     if row["evidence_json"]:
         return PreferenceEvidence.model_validate_json(row["evidence_json"])
@@ -257,6 +349,48 @@ def _decode_evidence(row: sqlite3.Row) -> PreferenceEvidence:
         lockedPaths=_decode_paths(row["locked_paths_json"]),
         strength="weak",
     )
+
+
+def _outcome(action: str) -> TasteOutcome | None:
+    return OUTCOMES.get(action)
+
+
+def _decode_observed_appearance(snapshot: str | None, target_element_id: str) -> ButtonAppearance | None:
+    if not snapshot:
+        return None
+    try:
+        decoded = json.loads(snapshot)
+        appearance = decoded["elements"][target_element_id]["props"]["appearance"]
+        return ButtonAppearance.model_validate(appearance)
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _decode_diff(value: str | None) -> list[SpecDiff]:
+    if not value:
+        return []
+    try:
+        return [SpecDiff.model_validate(item) for item in json.loads(value)]
+    except (TypeError, ValueError):
+        return []
+
+
+def _decode_directives(value: str | None) -> list[AttributeDirective]:
+    if not value:
+        return []
+    try:
+        return DIRECTIVES_ADAPTER.validate_json(value)
+    except ValidationError:
+        return []
+
+
+def _decode_interpretation(value: str | None) -> Interpretation | None:
+    if not value:
+        return None
+    try:
+        return Interpretation.model_validate_json(value)
+    except ValueError:
+        return None
 
 
 def _decode_paths(

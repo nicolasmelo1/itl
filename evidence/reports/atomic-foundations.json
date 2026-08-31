@@ -1,0 +1,21 @@
+{
+  "scenario": "atomic-foundations",
+  "status": "passed",
+  "goal": "Foundations are a canonical, versionable token source projected consistently to the shared component library.",
+  "source": "packages/design-system/tokens/itl.tokens.json",
+  "sourceSha256": "3f73deeb1421164280c221a8e9c4c157adf92fe0dab42b99c7522f007084b352",
+  "assertions": [
+    {
+      "type": "atomic.foundations_use_a_canonical_dtcg_shaped_source",
+      "status": "passed"
+    },
+    {
+      "type": "atomic.foundation_css_projection_has_no_token_drift",
+      "status": "passed"
+    },
+    {
+      "type": "atomic.existing_components_remain_type_safe_and_tested",
+      "status": "passed"
+    }
+  ]
+}

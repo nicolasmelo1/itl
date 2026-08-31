@@ -4,6 +4,8 @@ import { resolve } from "node:path";
 import {
   buttonCatalogManifest,
   buttonFixtureSpec,
+  atomicDesignLevels,
+  componentMetadata,
   ControlledRenderer,
   fixtureSpec,
   UI_SPEC_VERSION,
@@ -67,6 +69,20 @@ test("button.catalog_manifest_matches_the_typescript_visual_vocabulary", () => {
     readFileSync(resolve(process.cwd(), "../../contracts/catalog/button.v1.json"), "utf8"),
   ) as { appearance: typeof buttonCatalogManifest.appearance };
   expect(fixture.appearance).toEqual(buttonCatalogManifest.appearance);
+});
+
+test("ui.catalog_exposes_the_complete_atomic-design-vocabulary", () => {
+  expect(atomicDesignLevels).toEqual([
+    "foundation",
+    "atom",
+    "molecule",
+    "organism",
+    "template",
+    "page",
+  ]);
+  expect(componentMetadata.Button.level).toBe("atom");
+  expect(componentMetadata.Card.level).toBe("molecule");
+  expect(componentMetadata.Card.allowedChildTypes).not.toContain("Card");
 });
 
 test("ui.invalid_specs_fail_closed", () => {
@@ -141,4 +157,25 @@ test("button.web_does_not_submit_an_empty_critique", () => {
   render(<ControlledCanvas locale="en" />);
 
   expect(screen.getByRole("button", { name: "Review interpretation" })).toHaveProperty("disabled", true);
+});
+
+test("candidate feedback persists the reviewed variant, and acceptance begins a new round", async () => {
+  const fetchMock = installRefineApi();
+  render(<ControlledCanvas locale="en" />);
+  fireEvent.change(screen.getByLabelText("Critique"), { target: { value: "It is too rounded." } });
+  fireEvent.click(screen.getByRole("button", { name: "Review interpretation" }));
+  await screen.findByRole("region", { name: "Review refinement interpretation" });
+  fireEvent.click(screen.getByRole("button", { name: "Generate constrained alternatives" }));
+  await screen.findByRole("region", { name: "Constrained alternatives" });
+
+  fireEvent.click(screen.getAllByRole("button", { name: "Almost" })[0]);
+  const almostRequest = fetchMock.mock.calls
+    .map(([, init]) => JSON.parse(String(init?.body)) as Record<string, unknown>)
+    .find((body) => body.action === "almost");
+  expect(almostRequest).toMatchObject({ candidateId: "exploit-1", afterSpec: buttonFixtureSpec });
+
+  fireEvent.click(screen.getAllByRole("button", { name: "Accept" })[0]);
+  expect(screen.queryByRole("region", { name: "Review refinement interpretation" })).toBeNull();
+  expect((screen.getByLabelText("Critique") as HTMLTextAreaElement).value).toBe("");
+  expect(screen.getByLabelText("Learning loop debugger").textContent).toContain("Round 2");
 });

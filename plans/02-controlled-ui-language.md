@@ -20,8 +20,9 @@ or unsupported specs never reach the renderer.
   CSS or a vendor design system.
 - Use Storybook as the design-system workbench, documentation surface, and
   isolated state test harness. It is not the source of truth for UI specs.
-- Begin with atoms: Button first, then Input, Badge, and Card. Do not model
-  molecules or page composition in this phase.
+- Begin with atoms: Button first, then Input and Badge. Card is the one
+  bounded molecule in this phase because it composes registered child atoms;
+  do not model organisms, templates, or page composition yet.
 - Each variable visual property is a finite enum/token. Raw CSS, Tailwind
   class strings, arbitrary colors, and free-form pixel values are forbidden in
   the generated spec.
@@ -46,9 +47,9 @@ or unsupported specs never reach the renderer.
 6. Add Storybook stories for each controlled Button family and state. Stories
    should make the permitted design space legible: technical/square, subtle,
    outline, compact, disabled, loading, and focus-visible.
-7. Repeat the minimum schema/component/story pattern for Input, Badge, and
-   Card only after the Button contract is proven. Avoid premature nesting;
-   Card may host registered element IDs but must not invent a generic layout
+7. Repeat the minimum schema/component/story pattern for Input and Badge only
+   after the Button contract is proven. Then add Card as a bounded molecule
+   that may host registered element IDs, without inventing a generic layout
    language.
 8. Add unit tests for schema/catalog failures and UI tests for native semantics
    and focus behavior. Add Storybook accessibility checks and a small set of

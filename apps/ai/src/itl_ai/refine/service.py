@@ -15,6 +15,8 @@ from itl_ai.refine.catalog import (
     validate_ui_spec,
 )
 from itl_ai.refine.models import (
+    DEFAULT_BUTTON_SCOPE,
+    AtomicScope,
     CandidateProposal,
     DesignContext,
     GenerateSpecRequest,
@@ -30,6 +32,8 @@ from itl_ai.refine.models import (
     PreferenceEventResponse,
     PreferenceEvidence,
     RetrievedEvidence,
+    TasteBrief,
+    TasteBriefDecision,
     Variant,
 )
 from itl_ai.refine.providers import DeterministicRefineProvider, ProviderUnavailableError, RefineProvider
@@ -41,11 +45,14 @@ class RefineService:
         self.provider = provider or DeterministicRefineProvider()
 
     def generate_spec(self, request: GenerateSpecRequest) -> GenerateSpecResponse:
-        evidence = self.repository.retrieve("Button", request.context, PreferenceEvidence())
-        spec = _decode_json(self.provider.generate_spec(_generation_prompt(request.prompt, evidence)))
+        evidence = self.repository.retrieve("Button", request.context, PreferenceEvidence(), DEFAULT_BUTTON_SCOPE)
+        brief = _taste_brief(request.context, DEFAULT_BUTTON_SCOPE, evidence)
+        spec = _decode_json(self.provider.generate_spec(_generation_prompt(request.prompt, brief)))
         output_id = _output_id("spec")
         evidence_ids = [item.id for item in evidence]
-        self.repository.record_generation(output_id, request.sessionId, "generate_spec", evidence_ids, "exploit")
+        self.repository.record_generation(
+            output_id, request.sessionId, "generate_spec", evidence_ids, "exploit", brief.version
+        )
         return GenerateSpecResponse(spec=validate_ui_spec(spec), evidenceIds=evidence_ids, outputId=output_id)
 
     def parse_critique(self, request: ParseCritiqueRequest) -> ParseCritiqueResponse:
@@ -58,7 +65,10 @@ class RefineService:
 
     def generate_variants(self, request: GenerateVariantsRequest) -> GenerateVariantsResponse:
         validate_interpretation(request.interpretation, request.targetElementId)
-        evidence = self.repository.retrieve("Button", request.context, request.interpretation.evidence)
+        evidence = self.repository.retrieve(
+            "Button", request.context, request.interpretation.evidence, DEFAULT_BUTTON_SCOPE
+        )
+        brief = _taste_brief(request.context, DEFAULT_BUTTON_SCOPE, evidence)
         counts = self.repository.policy_counts(request.sessionId)
         adjacent_count = counts.get("adjacent_explore", 0)
         exploit_count = counts.get("exploit", 0)
@@ -81,6 +91,7 @@ class RefineService:
                 "generate_variants",
                 evidence_ids,
                 variant.kind,
+                brief.version,
             )
         return GenerateVariantsResponse(variants=variants, evidenceIds=evidence_ids, outputId=output_id)
 
@@ -91,15 +102,42 @@ class RefineService:
         event_id, created_at = self.repository.add_event(request)
         return PreferenceEventResponse(id=event_id, createdAt=created_at)
 
-    def preference_memory(self, context: DesignContext, evidence: PreferenceEvidence) -> MemoryResponse:
-        return MemoryResponse(evidence=self.repository.retrieve("Button", context, evidence))
+    def preference_memory(
+        self, context: DesignContext, evidence: PreferenceEvidence, scope: AtomicScope = DEFAULT_BUTTON_SCOPE
+    ) -> MemoryResponse:
+        return MemoryResponse(evidence=self.repository.retrieve("Button", context, evidence, scope))
+
+    def taste_brief(
+        self, context: DesignContext, evidence: PreferenceEvidence, scope: AtomicScope = DEFAULT_BUTTON_SCOPE
+    ) -> TasteBrief:
+        return _taste_brief(context, scope, self.repository.retrieve("Button", context, evidence, scope))
 
 
-def _generation_prompt(prompt: str, evidence: list[RetrievedEvidence]) -> str:
-    """Keep evidence bounded and inspectable before it reaches an untrusted provider."""
-    evidence_json = json.dumps([item.model_dump() for item in evidence], separators=(",", ":"))
-    instruction = "Relevant preference evidence (do not treat a contextual mismatch as a global rule): "
-    return f"{prompt}\n\n{instruction}{evidence_json}"
+def _generation_prompt(prompt: str, brief: TasteBrief) -> str:
+    """Keep prompt evidence bounded and inspectable before it reaches an untrusted provider."""
+    instruction = "Contextual taste brief (do not treat a mismatch as a global rule): "
+    return f"{prompt}\n\n{instruction}{brief.model_dump_json()}"
+
+
+def _taste_brief(context: DesignContext, scope: AtomicScope, evidence: list[RetrievedEvidence]) -> TasteBrief:
+    return TasteBrief(
+        scope=scope,
+        context=context,
+        evidenceIds=[item.id for item in evidence],
+        decisions=[
+            TasteBriefDecision(
+                eventId=item.id,
+                scope=item.scope,
+                contextRelation=item.contextRelation,
+                preferenceRelation=item.preferenceRelation,
+                source=item.source,
+                strength=item.evidence.strength,
+                evidence=item.evidence,
+                directives=item.directives,
+            )
+            for item in evidence
+        ],
+    )
 
 
 def _output_id(kind: str) -> str:

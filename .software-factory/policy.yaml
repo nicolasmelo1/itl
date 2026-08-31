@@ -41,6 +41,11 @@ gates:
     evidence: "evidence/gates/button-contextual-lab.json"
     plan: "plans/05-button-contextual-lab.md"
     required_assertions: ["button.directives_preserve_direction", "button.recipes_are_coherent", "button.taste_space_is_visual_only", "button.web_uses_api_and_typed_context", "button.retrieval_is_contextual"]
+  atomic-design-system:
+    activation: ["contracts/catalog/atomic-design.v1.json", "packages/design-system/tokens/**", "packages/design-system/src/**", "packages/ui-catalog/src/**", "apps/ai/src/itl_ai/memory/**", "apps/ai/src/itl_ai/refine/**", "apps/ai/src/itl_ai/main.py", "apps/web/src/app/**", "apps/web/src/features/canvas/**", "scripts/verify-atomic-*.mjs"]
+    evidence: "evidence/gates/atomic-design-system.json"
+    plan: "plans/06-atomic-composition-loop.md"
+    required_assertions: ["atomic.foundations_are_canonical_and_projected", "atomic.catalog_has_complete_hierarchy_and_safe_slots", "atomic.sessions_preserve_level_scope_and_context", "atomic.taste_brief_is_minimized_versioned_and_auditable", "atomic.templates_and_pages_render_only_registered_structures", "atomic.accessibility_and_responsive_states_hold_at_every_layer"]
 
 rules:
   # L2 — The guardrail's own configuration is hash-locked

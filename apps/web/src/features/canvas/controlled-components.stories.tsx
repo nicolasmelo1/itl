@@ -49,7 +49,7 @@ export const FocusVisible: ButtonStory = {
 
 export const RegisteredAtoms: StoryObj = {
   render: () => (
-    <Card description="The catalog registry uses these shared components." emphasis="raised" title="Registered atoms">
+    <Card description="The catalog registry composes these shared building blocks." emphasis="raised" title="Registered building blocks">
       <Badge label="Ready" tone="success" />
       <Input label="Name" placeholder="Ada Lovelace" state="default" tone="quiet" value="" />
     </Card>

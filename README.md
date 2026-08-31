@@ -1,10 +1,10 @@
 # Interactive Taste Learning (ITL)
 
-ITL is a local laboratory for learning a person's UI taste through a constrained refinement loop. Today it deliberately edits only one component—`Button`—so the product can answer a hard question before growing into a design system: after several interactions, can it propose alternatives that fit a person and the current surface without collapsing into one generic style?
+ITL is a local laboratory for learning a person's UI taste through a constrained refinement loop. Today it deliberately edits only one component—`Button`—as the first atom in an Atomic Design progression. A short session starts with foundations (type, spacing, borders and focus), refines one atom, then eventually composes molecules, organisms, templates, and pages. The goal is not a generic style score: it is contextual, reviewable taste evidence that can later guide UI-generation prompts.
 
 The browser renders a finite, schema-validated JSON UI spec. A person selects the Button in a toolbar, hero, or form, writes a critique, reviews the interpreted visual directives, then asks the API for constrained alternatives. Explicit actions are recorded as append-only SQLite events with typed role, surface, density, evidence, directives, and a spec diff.
 
-The application is deliberately narrow at this stage: Button only, controlled JSON UI specs (never screenshots), deterministic validation, and no global "beauty" score or vector database.
+The application is deliberately narrow at this stage: Button only, controlled JSON UI specs (never screenshots), deterministic validation, and no global "beauty" score or vector database. The complete target architecture is documented in [the Atomic Design system](docs/atomic-design-system.md) and its [versioned catalog contract](contracts/catalog/atomic-design.v1.json). Delivery happens in 20–40 minute loops, but the system's target includes every layer through concrete pages.
 
 ## Quickstart
 
@@ -110,4 +110,7 @@ The current deterministic completion gates are:
 pnpm verify:controlled-ui-language
 pnpm verify:memory-exploration-validation
 pnpm verify:button-contextual-lab
+pnpm verify:atomic-foundations
+# Completion gate for Plan 06; remains intentionally red until every required layer is implemented.
+pnpm verify:atomic-design-system
 ```
