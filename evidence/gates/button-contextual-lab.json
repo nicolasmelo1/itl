@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "gate": "button-contextual-lab",
-  "implementation_sha256": "1a5a48531530bdb2a40f5163329bdcb35a7c34762d8af448bde14aa77a34e2b8",
+  "implementation_sha256": "8d9b19aea750088d9c1f271a271de8a08c9083ae9fb41c194093c0b8509808e2",
   "runs": [
     {
       "scenario": "button-contextual-lab",

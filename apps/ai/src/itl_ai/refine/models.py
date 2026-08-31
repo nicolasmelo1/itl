@@ -144,7 +144,8 @@ class ComponentEntry:
 
     @property
     def isEditable(self) -> bool:
-        return self.appearance is not None
+        """A subject is editable only if it has both a vocabulary and a scope."""
+        return self.appearance is not None and self.scopeId is not None
 
 
 COMPONENT_REGISTRY: dict[str, ComponentEntry] = {
@@ -190,7 +191,8 @@ def scope_for_component(component_type: str, semantic_role: str | None = None) -
     move the subject to another Atomic level.
     """
     entry = EDITABLE_COMPONENTS[component_type]
-    assert entry.scopeId is not None
+    if entry.scopeId is None:
+        raise KeyError(f"{component_type} is registered without a learning scope.")
     return AtomicScope(level=entry.level, id=entry.scopeId, semanticRole=semantic_role)
 
 
