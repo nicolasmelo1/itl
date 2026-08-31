@@ -4,7 +4,7 @@ import { afterEach, expect, test } from "vitest";
 
 afterEach(cleanup);
 
-test("atomic.templates_and_pages_render_only_registered_structures", () => {
+test("atomic.settings_page_uses_registered_compositions", () => {
   render(<ControlledRenderer spec={projectSettingsFixtureSpec} />);
   expect(screen.getByRole("main", { name: "Project settings" })).toBeDefined();
   expect(screen.getByRole("heading", { name: "Project settings", level: 1 })).toBeDefined();

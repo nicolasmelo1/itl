@@ -1,21 +1,24 @@
 "use client";
 
 import { markDevtoolsActive } from "@json-render/core";
-import { buttonFixtureSpec, ControlledRenderer } from "@itl/ui-catalog";
+import { ControlledRenderer, refineFixtureSpec, type UISpec } from "@itl/ui-catalog";
 import { type MouseEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 
 import { messages as localizedMessages, type Locale, type Messages } from "@/i18n/messages";
 
 import {
-  type ButtonPath,
-  type ButtonToken,
+  type AppearancePath,
+  type AppearanceToken,
   type DesignContext,
   type Interpretation,
   type RefineVariant,
-  buttonTokenValues,
+  appearancePaths,
+  appearanceValues,
+  currentAppearance,
+  editableComponentType,
   emptyInterpretation,
-  isButtonSpec,
-  setButtonToken,
+  scopeFor,
+  setAppearanceToken,
   updateInterpretation,
 } from "../refine/refine-engine";
 import {
@@ -39,7 +42,7 @@ type ConcreteObservation = RetrievedObservation & {
 
 export function ControlledCanvas({ locale }: { locale: Locale }) {
   const messages = localizedMessages[locale];
-  const [currentSpec, setCurrentSpec] = useState(buttonFixtureSpec);
+  const [currentSpec, setCurrentSpec] = useState(refineFixtureSpec);
   const [surface, setSurface] = useState<keyof typeof contexts>("hero");
   const [selectedElementId, setSelectedElementId] = useState("continue-button");
   const [reaction, setReaction] = useState("1");
@@ -48,7 +51,7 @@ export function ControlledCanvas({ locale }: { locale: Locale }) {
   const [variants, setVariants] = useState<RefineVariant[]>([]);
   const [isParsingCritique, setIsParsingCritique] = useState(false);
   const [isGeneratingVariants, setIsGeneratingVariants] = useState(false);
-  const [status, setStatus] = useState(messages.selectButton);
+  const [status, setStatus] = useState(messages.selectSubject);
   const [memoryEvents, setMemoryEvents] = useState(0);
   const [round, setRound] = useState(1);
   const [observations, setObservations] = useState<RetrievedObservation[]>([]);
@@ -56,15 +59,20 @@ export function ControlledCanvas({ locale }: { locale: Locale }) {
 
   useEffect(() => markDevtoolsActive(), []);
 
-  const selectedIsButton = isButtonSpec(currentSpec, selectedElementId);
-  const selectedButton = useMemo(
-    () => (selectedIsButton ? currentSpec.elements[selectedElementId] : undefined),
-    [currentSpec, selectedElementId, selectedIsButton],
+  const selectedType = editableComponentType(currentSpec, selectedElementId);
+  const tokenValues = useMemo(
+    () => appearanceValues(currentSpec, selectedElementId),
+    [currentSpec, selectedElementId],
   );
+  const appearance = useMemo(
+    () => currentAppearance(currentSpec, selectedElementId),
+    [currentSpec, selectedElementId],
+  );
+  const paths = useMemo(() => appearancePaths(currentSpec, selectedElementId), [currentSpec, selectedElementId]);
 
   async function interpretCritique() {
-    if (!selectedIsButton) {
-      setStatus(messages.selectButton);
+    if (!selectedType) {
+      setStatus(messages.selectSubject);
       return;
     }
     const trimmedCritique = critique.trim();
@@ -79,7 +87,7 @@ export function ControlledCanvas({ locale }: { locale: Locale }) {
         targetElementId: selectedElementId,
         critique: trimmedCritique,
       });
-      setInterpretation(reviewableInterpretation(parsed));
+      setInterpretation(reviewableInterpretation(parsed, paths));
       setVariants([]);
       setStatus(messages.parsed);
     } catch (error) {
@@ -103,12 +111,18 @@ export function ControlledCanvas({ locale }: { locale: Locale }) {
           interpretation,
         });
       }
+      const scope = scopeFor(currentSpec, selectedElementId);
+      if (!scope) {
+        setStatus(messages.selectSubject);
+        return;
+      }
       const next = await requestVariants({
         spec: currentSpec,
         targetElementId: selectedElementId,
         interpretation,
         includeWild,
         context,
+        scope,
       });
       setVariants(next);
       setStatus(
@@ -121,12 +135,12 @@ export function ControlledCanvas({ locale }: { locale: Locale }) {
     }
   }
 
-  function editToken(token: ButtonToken, value: string) {
-    if (!selectedIsButton) return;
-    const nextSpec = setButtonToken(currentSpec, selectedElementId, token, value);
+  function editToken(token: AppearanceToken, value: string) {
+    if (!selectedType) return;
+    const nextSpec = setAppearanceToken(currentSpec, selectedElementId, token, value);
     setCurrentSpec(nextSpec);
     setInterpretation((current) =>
-      updateInterpretation(current ?? emptyInterpretation(selectedElementId), `/appearance/${token}`, true),
+      updateInterpretation(current ?? emptyInterpretation(selectedElementId), `/appearance/${token}`, true, paths),
     );
     setVariants([]);
     recordEvent({
@@ -146,12 +160,20 @@ export function ControlledCanvas({ locale }: { locale: Locale }) {
     setStatus(`${token} was directly edited and is now strong ${messages.keep} evidence.`);
   }
 
-  function recordEvent(input: Omit<Parameters<typeof recordPreferenceEvent>[0], "context">) {
-    void recordPreferenceEvent({ ...input, context }).then((recorded) => {
+  function recordEvent(
+    input: Omit<Parameters<typeof recordPreferenceEvent>[0], "context" | "componentType" | "scope">,
+  ) {
+    // A decision is only recordable when its subject and level are known.
+    const scope = scopeFor(currentSpec, input.targetElementId);
+    const componentType = editableComponentType(currentSpec, input.targetElementId);
+    if (!scope || !componentType) return;
+    void recordPreferenceEvent({ ...input, componentType, scope, context }).then((recorded) => {
       if (!recorded) return;
       setMemoryEvents((count) => count + 1);
       void retrievePreferenceMemory({
         context,
+        componentType,
+        scope,
         evidence: input.evidence ?? input.interpretation?.evidence,
       }).then(setObservations);
     });
@@ -160,14 +182,18 @@ export function ControlledCanvas({ locale }: { locale: Locale }) {
   function selectSurface(nextSurface: keyof typeof contexts) {
     setSurface(nextSurface);
     setVariants([]);
-    void retrievePreferenceMemory({ context: contexts[nextSurface] }).then(setObservations);
+    const scope = scopeFor(currentSpec, selectedElementId);
+    if (!scope || !selectedType) return;
+    void retrievePreferenceMemory({ context: contexts[nextSurface], componentType: selectedType, scope }).then(
+      setObservations,
+    );
   }
 
   return (
     <main className={styles.canvas} onClick={selectElement(setSelectedElementId)}>
       <div className={styles.workbench}>
         <section
-          aria-label="Button context"
+          aria-label="Design context"
           className={styles.contextPicker}
           onClick={(event) => event.stopPropagation()}
         >
@@ -195,7 +221,7 @@ export function ControlledCanvas({ locale }: { locale: Locale }) {
             {messages.selectedElement}: {selectedElementId}
           </p>
         </section>
-        {selectedIsButton && selectedButton?.type === "Button" ? (
+        {selectedType ? (
           <>
             <div aria-label={messages.feedback} className={styles.reviewDivider} role="separator">
               <span>{messages.feedback}</span>
@@ -249,13 +275,13 @@ export function ControlledCanvas({ locale }: { locale: Locale }) {
             <fieldset className={styles.inspector}>
               <legend>{messages.inspector}</legend>
               <p>{messages.inspectorHint}</p>
-              {Object.entries(buttonTokenValues).map(([token, values]) => (
+              {Object.entries(tokenValues).map(([token, values]) => (
                 <label key={token}>
                   {token}
                   <select
                     aria-label={`Edit ${token}`}
-                    onChange={(event) => editToken(token as ButtonToken, event.target.value)}
-                    value={selectedButton.props.appearance[token as ButtonToken]}
+                    onChange={(event) => editToken(token, event.target.value)}
+                    value={appearance[token]}
                   >
                     {values.map((value) => <option key={value} value={value}>{value}</option>)}
                   </select>
@@ -265,7 +291,7 @@ export function ControlledCanvas({ locale }: { locale: Locale }) {
           </section>
           </>
         ) : (
-          <p className={styles.notice}>{messages.noButton}</p>
+          <p className={styles.notice}>{messages.noSubject}</p>
         )}
         <p aria-live="polite" className={styles.status} data-testid="refine-status">{status}</p>
         <aside aria-label={messages.preferenceMemory(memoryEvents)} className={styles.notice}>
@@ -282,6 +308,7 @@ export function ControlledCanvas({ locale }: { locale: Locale }) {
               interpretation={interpretation}
               isGenerating={isGeneratingVariants}
               messages={messages}
+              paths={paths}
               onChange={setInterpretation}
               onConfirm={() => void generateCandidates()}
             />
@@ -310,6 +337,7 @@ export function ControlledCanvas({ locale }: { locale: Locale }) {
                   key={variant.id}
                   messages={messages}
                   surface={surface}
+                  targetElementId={selectedElementId}
                   variant={variant}
                   onAccept={() => {
                     recordEvent({
@@ -387,7 +415,7 @@ function ContextSurface({
   surface: keyof typeof contexts;
 }) {
   return (
-    <section aria-label={messages.buttonSurface(messages.surfaces[surface])} className={`${styles.currentSpec} ${styles[surface]}`}>
+    <section aria-label={messages.subjectSurface(messages.surfaces[surface])} className={`${styles.currentSpec} ${styles[surface]}`}>
       {surface === "toolbar" ? <span>{messages.projectSettings}</span> : null}
       {surface === "hero" ? <div><p>{messages.heroTagline}</p><h2>{messages.heroTitle}</h2></div> : null}
       {surface === "form" ? <label>{messages.emailAddress}<input placeholder={messages.emailPlaceholder} type="email" /></label> : null}
@@ -396,14 +424,14 @@ function ContextSurface({
   );
 }
 
-function InterpretationReview({ interpretation, isGenerating, messages, onChange, onConfirm }: {
+function InterpretationReview({ interpretation, isGenerating, messages, paths, onChange, onConfirm }: {
   interpretation: Interpretation;
   isGenerating: boolean;
   messages: Messages;
+  paths: AppearancePath[];
   onChange: (interpretation: Interpretation) => void;
   onConfirm: () => void;
 }) {
-  const paths = Object.keys(buttonTokenValues).map((token) => `/appearance/${token}` as ButtonPath);
   const keptPaths = interpretation.directives
     .filter((directive) => directive.kind === "keep")
     .map((directive) => directive.path);
@@ -417,7 +445,7 @@ function InterpretationReview({ interpretation, isGenerating, messages, onChange
         heading={messages.keep}
         paths={paths}
         selected={keptPaths}
-        onChange={(path, checked) => onChange(updateInterpretation(interpretation, path, checked))}
+        onChange={(path, checked) => onChange(updateInterpretation(interpretation, path, checked, paths))}
       />
       <button className={styles.primaryAction} disabled={isGenerating} onClick={onConfirm} type="button">
         {isGenerating ? messages.generatingAlternatives : messages.generateAlternatives}
@@ -429,9 +457,9 @@ function InterpretationReview({ interpretation, isGenerating, messages, onChange
 
 function TokenChecklist({ heading, paths, selected, onChange }: {
   heading: string;
-  paths: ButtonPath[];
-  selected: ButtonPath[];
-  onChange: (path: ButtonPath, checked: boolean) => void;
+  paths: AppearancePath[];
+  selected: AppearancePath[];
+  onChange: (path: AppearancePath, checked: boolean) => void;
 }) {
   return (
     <fieldset className={styles.tokenChecklist}>
@@ -446,12 +474,13 @@ function TokenChecklist({ heading, paths, selected, onChange }: {
   );
 }
 
-function reviewableInterpretation(interpretation: Interpretation): Interpretation {
+function reviewableInterpretation(interpretation: Interpretation, paths: AppearancePath[]): Interpretation {
   const keptPaths = new Set(
     interpretation.directives.filter((directive) => directive.kind === "keep").map((directive) => directive.path),
   );
-  const firstPath = Object.keys(buttonTokenValues)[0] as ButtonToken;
-  return updateInterpretation(interpretation, `/appearance/${firstPath}`, keptPaths.has(`/appearance/${firstPath}`));
+  const [firstPath] = paths;
+  if (!firstPath) return interpretation;
+  return updateInterpretation(interpretation, firstPath, keptPaths.has(firstPath), paths);
 }
 
 function LearningLoopDebugger({ messages, observations, round }: {
@@ -472,8 +501,9 @@ function LearningLoopDebugger({ messages, observations, round }: {
           <li key={observation.id}>
             <span>{messages.observationOutcome(observation.outcome)}</span>
             <span>
-              {observation.context?.surface ?? messages.unknownContext} — {observation.observedAppearance.recipe}
-              {" / "}{observation.observedAppearance.radius}{" / "}{observation.observedAppearance.density}
+              {observation.context?.surface ?? messages.unknownContext} — {observation.observedAppearance.componentType}
+              {": "}
+              {Object.values(observation.observedAppearance.appearance).join(" / ")}
             </span>
           </li>
         ))}
@@ -482,15 +512,16 @@ function LearningLoopDebugger({ messages, observations, round }: {
   );
 }
 
-function VariantCard({ baseline, messages, surface, variant, onAccept, onEvidence }: {
-  baseline: typeof buttonFixtureSpec;
+function VariantCard({ baseline, messages, surface, targetElementId, variant, onAccept, onEvidence }: {
+  baseline: UISpec;
   messages: Messages;
   surface: keyof typeof contexts;
+  targetElementId: string;
   variant: RefineVariant;
   onAccept: () => void;
   onEvidence: (outcome: "almost" | "indifferent") => void;
 }) {
-  const changes = variantChanges(baseline, variant.spec);
+  const changes = variantChanges(baseline, variant.spec, targetElementId);
   return (
     <article className={styles.variant}>
       <p className={styles.variantKind}>{variant.kind.replaceAll("_", " ")}: {variant.direction}</p>
@@ -512,13 +543,12 @@ function VariantCard({ baseline, messages, surface, variant, onAccept, onEvidenc
   );
 }
 
-function variantChanges(baseline: typeof buttonFixtureSpec, variant: RefineVariant["spec"]): string[] {
-  const before = baseline.elements["continue-button"];
-  const after = variant.elements["continue-button"];
-  if (before?.type !== "Button" || after?.type !== "Button") return [];
-  return (Object.keys(buttonTokenValues) as ButtonToken[])
-    .filter((token) => before.props.appearance[token] !== after.props.appearance[token])
-    .map((token) => `${token}: ${before.props.appearance[token]} → ${after.props.appearance[token]}`);
+function variantChanges(baseline: UISpec, variant: RefineVariant["spec"], targetElementId: string): string[] {
+  const before = currentAppearance(baseline, targetElementId);
+  const after = currentAppearance(variant, targetElementId);
+  return Object.keys(before)
+    .filter((token) => before[token] !== after[token])
+    .map((token) => `${token}: ${before[token]} → ${after[token]}`);
 }
 
 function selectElement(setSelectedElementId: (elementId: string) => void) {

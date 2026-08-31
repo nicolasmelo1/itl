@@ -1,6 +1,11 @@
-"""SQLite boundary for append-only, contextual Button preference evidence."""
+"""SQLite boundary for append-only, contextual preference evidence.
+
+Evidence is partitioned by `AtomicScope`: one editable subject never reads
+another's decisions unless a reviewed rule says it may.
+"""
 
 import json
+import re
 import sqlite3
 from collections.abc import Generator
 from contextlib import contextmanager
@@ -12,11 +17,12 @@ from pydantic import TypeAdapter, ValidationError
 
 from itl_ai.refine.models import (
     DEFAULT_BUTTON_SCOPE,
+    EDITABLE_COMPONENTS,
     AtomicScope,
     AttributeDirective,
-    ButtonAppearance,
     DesignContext,
     Interpretation,
+    ObservedAppearance,
     PreferenceEventRequest,
     PreferenceEvidence,
     RetrievedEvidence,
@@ -34,6 +40,7 @@ SOURCE_CONFIDENCE = {
 }
 STRENGTH_SCORE = {"weak": 10, "moderate": 30, "strong": 50}
 DIRECTIVES_ADAPTER = TypeAdapter(list[AttributeDirective])
+VISUAL_PATH_PATTERN = re.compile(r"^/appearance/[a-z][a-zA-Z0-9]*$")
 TasteOutcome: TypeAlias = Literal["accepted", "almost", "rejected", "indifferent", "manual_edit"]
 OUTCOMES: dict[str, TasteOutcome] = {
     "candidate_acceptance": "accepted",
@@ -41,6 +48,11 @@ OUTCOMES: dict[str, TasteOutcome] = {
     "rejection": "rejected",
     "indifference": "indifferent",
     "manual_edit": "manual_edit",
+    "confirmed_critique": "manual_edit",
+    "explicit_attribute_feedback": "manual_edit",
+    "absolute_feedback": "manual_edit",
+    "pairwise_choice": "accepted",
+    "explore_more": "indifferent",
 }
 
 
@@ -113,6 +125,7 @@ class PreferenceRepository:
                 "spec_diff_json": "ALTER TABLE preference_events ADD COLUMN spec_diff_json TEXT",
                 "atomic_level": "ALTER TABLE preference_events ADD COLUMN atomic_level TEXT",
                 "scope_json": "ALTER TABLE preference_events ADD COLUMN scope_json TEXT",
+                "outcome": "ALTER TABLE preference_events ADD COLUMN outcome TEXT",
             }
             for column, statement in migrations.items():
                 if column not in columns:
@@ -128,7 +141,7 @@ class PreferenceRepository:
                 "CREATE INDEX IF NOT EXISTS generation_audits_session ON generation_audits(session_id, created_at DESC)"
             )
             connection.execute(
-                "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (4, CURRENT_TIMESTAMP)"
+                "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (5, CURRENT_TIMESTAMP)"
             )
 
     def add_event(self, event: PreferenceEventRequest) -> tuple[int, datetime]:
@@ -141,11 +154,11 @@ class PreferenceRepository:
                 """
                 INSERT INTO preference_events (
                     session_id, component_type, atomic_level, scope_json, context, context_json,
-                    target_element_id, action, source,
+                    target_element_id, action, outcome, source,
                     before_snapshot_id, after_snapshot_id, selected_element_id, candidate_id,
                     liked_paths_json, disliked_paths_json, locked_paths_json, evidence_json, directives_json,
                     spec_diff_json, critique, parser_interpretation_json, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     event.sessionId,
@@ -156,6 +169,7 @@ class PreferenceRepository:
                     _json(event.context.model_dump()),
                     event.targetElementId,
                     event.action,
+                    event.outcome,
                     event.source,
                     before_id,
                     after_id,
@@ -184,18 +198,27 @@ class PreferenceRepository:
         scope: AtomicScope = DEFAULT_BUTTON_SCOPE,
         limit: int = 6,
     ) -> list[RetrievedEvidence]:
+        """Return evidence for one editable subject only, ranked by relevance.
+
+        The component type is a hard partition: an atom decision is never
+        retrieved for a molecule. The scope then ranks subjects inside it.
+        """
         with self._connection() as connection:
             rows = connection.execute(
                 """
                 SELECT preference_events.id, preference_events.atomic_level, preference_events.scope_json,
                        preference_events.context_json, preference_events.context,
-                       preference_events.source, preference_events.action, preference_events.evidence_json,
+                       preference_events.source, preference_events.action, preference_events.outcome,
+                       preference_events.evidence_json,
                        preference_events.liked_paths_json, preference_events.disliked_paths_json,
                        preference_events.locked_paths_json, preference_events.critique,
                        preference_events.candidate_id, preference_events.directives_json,
                        preference_events.spec_diff_json, preference_events.parser_interpretation_json,
-                       preference_events.target_element_id, after_snapshot.spec_json AS after_snapshot_json
+                       preference_events.target_element_id, before_snapshot.spec_json AS before_snapshot_json,
+                       after_snapshot.spec_json AS after_snapshot_json
                 FROM preference_events
+                JOIN spec_snapshots AS before_snapshot
+                  ON before_snapshot.id = preference_events.before_snapshot_id
                 LEFT JOIN spec_snapshots AS after_snapshot
                   ON after_snapshot.id = preference_events.after_snapshot_id
                 WHERE preference_events.component_type = ?
@@ -288,7 +311,6 @@ def _retrieval_row(
         SOURCE_CONFIDENCE[str(row["source"])]
         + STRENGTH_SCORE[stored_evidence.strength]
         + {"exact": 120, "compatible": 70, "global": 25, "mismatch": 0}[context_relation]
-        + {"supporting": 30, "unknown": 0, "conflicting": -20}[preference_relation]
         + _scope_score(requested_scope, stored_scope)
     )
     evidence = RetrievedEvidence(
@@ -300,8 +322,10 @@ def _retrieval_row(
         context=stored_context,
         evidence=stored_evidence,
         critique=row["critique"],
-        outcome=_outcome(row["action"]),
-        observedAppearance=_decode_observed_appearance(row["after_snapshot_json"], row["target_element_id"]),
+        outcome=_outcome(row["action"], row["outcome"]),
+        observedAppearance=_decode_observed_appearance(
+            row["after_snapshot_json"] or row["before_snapshot_json"], row["target_element_id"]
+        ),
         diff=_decode_diff(row["spec_diff_json"]),
         candidateId=row["candidate_id"],
         directives=_decode_directives(row["directives_json"]),
@@ -351,17 +375,23 @@ def _decode_evidence(row: sqlite3.Row) -> PreferenceEvidence:
     )
 
 
-def _outcome(action: str) -> TasteOutcome | None:
-    return OUTCOMES.get(action)
+def _outcome(action: str, stored: str | None) -> TasteOutcome:
+    if stored in OUTCOMES.values():
+        return cast(TasteOutcome, stored)
+    return OUTCOMES.get(action, "indifferent")
 
 
-def _decode_observed_appearance(snapshot: str | None, target_element_id: str) -> ButtonAppearance | None:
+def _decode_observed_appearance(snapshot: str | None, target_element_id: str) -> ObservedAppearance | None:
+    """Recover what was on screen, validated against the subject's vocabulary."""
     if not snapshot:
         return None
     try:
-        decoded = json.loads(snapshot)
-        appearance = decoded["elements"][target_element_id]["props"]["appearance"]
-        return ButtonAppearance.model_validate(appearance)
+        element = json.loads(snapshot)["elements"][target_element_id]
+        entry = EDITABLE_COMPONENTS.get(element["type"])
+        if entry is None or entry.appearance is None:
+            return None
+        appearance = entry.appearance.model_validate(element["props"]["appearance"]).model_dump()
+        return ObservedAppearance(componentType=element["type"], appearance=appearance)
     except (KeyError, TypeError, ValueError):
         return None
 
@@ -393,26 +423,9 @@ def _decode_interpretation(value: str | None) -> Interpretation | None:
         return None
 
 
-def _decode_paths(
-    value: str,
-) -> list[
-    Literal[
-        "/appearance/recipe", "/appearance/size", "/appearance/radius", "/appearance/density", "/appearance/fontWeight"
-    ]
-]:
+def _decode_paths(value: str) -> list[str]:
     decoded = json.loads(value)
-    return [
-        item
-        for item in decoded
-        if item
-        in {
-            "/appearance/recipe",
-            "/appearance/size",
-            "/appearance/radius",
-            "/appearance/density",
-            "/appearance/fontWeight",
-        }
-    ]
+    return [item for item in decoded if isinstance(item, str) and VISUAL_PATH_PATTERN.match(item)]
 
 
 def _context_relation(

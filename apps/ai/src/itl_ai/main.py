@@ -132,7 +132,7 @@ def generate(_: GenerationRequest) -> JSONResponse:
     responses={status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": RefineErrorResponse}},
 )
 def generate_spec(request: GenerateSpecRequest) -> GenerateSpecResponse:
-    """Generate the only initial component family: a catalog-constrained Button."""
+    """Generate one catalog-constrained spec for the requested editable subject."""
     return refine_service.generate_spec(request)
 
 
@@ -168,8 +168,8 @@ def record_preference_event(request: PreferenceEventRequest) -> PreferenceEventR
 
 @app.post("/v1/preference-memory", response_model=MemoryResponse)
 def preference_memory(query: MemoryQuery) -> MemoryResponse:
-    """Return bounded, contextual evidence for the Button generator and memory UI."""
-    return refine_service.preference_memory(query.context, query.evidence, query.scope)
+    """Return bounded, contextual evidence for one subject's generator and memory UI."""
+    return refine_service.preference_memory(query.context, query.evidence, query.scope, query.componentType)
 
 
 def run() -> None:

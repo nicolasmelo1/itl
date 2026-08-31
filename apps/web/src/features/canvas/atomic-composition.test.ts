@@ -18,7 +18,7 @@ const completeComposition: AtomicComposition = {
   },
 };
 
-test("atomic.catalog_has_complete_hierarchy_and_safe_slots", () => {
+test("atomic.catalog_slice_has_valid_hierarchy_and_safe_slots", () => {
   expect(atomicDesignLevels).toEqual([
     "foundation",
     "atom",

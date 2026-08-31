@@ -4,12 +4,12 @@ import { buttonFixtureSpec } from "@itl/ui-catalog";
 test("the contextual canvas exposes one editable Button in each static surface", async ({ page }) => {
   await page.goto("/");
   await expect(page).toHaveURL(/\/en$/);
-  await expect(page.getByRole("region", { name: "hero Button surface" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "hero design surface" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Continue" })).toBeEnabled();
   await page.getByRole("button", { name: "toolbar" }).click();
-  await expect(page.getByRole("region", { name: "toolbar Button surface" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "toolbar design surface" })).toBeVisible();
   await page.getByRole("button", { name: "form" }).click();
-  await expect(page.getByRole("region", { name: "form Button surface" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "form design surface" })).toBeVisible();
 });
 
 test("the root route selects Brazilian Portuguese from the browser language", async ({ browser }) => {
@@ -65,6 +65,6 @@ test("a critique stays transient until its contextual interpretation is confirme
   expect(recordedActions).toEqual([]);
   await page.getByRole("button", { name: "Generate constrained alternatives" }).click();
   await expect(page.getByText("exploit: directive-led refinement")).toBeVisible();
-  await expect(page.getByRole("region", { name: "hero Button surface" })).toHaveCount(2);
+  await expect(page.getByRole("region", { name: "hero design surface" })).toHaveCount(2);
   expect(recordedActions).toContain("confirmed_critique");
 });

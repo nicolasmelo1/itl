@@ -1,21 +1,22 @@
 {
   "schema_version": 1,
   "gate": "atomic-design-system",
-  "implementation_sha256": "9056a2a1862f4dda6945a3064e1bb9b9f1729b03da2bb197da4f3319f6990128",
+  "implementation_sha256": "8c5471c5feffec5d3add96fa95ad292e7aabf290bfa70a59347d0691adc1c015",
   "runs": [
     {
       "scenario": "atomic-design-system",
       "status": "passed",
       "actor": "Codex",
       "report": "evidence/reports/atomic-design-system.json",
-      "report_sha256": "30deb0888b50820f85609f34df330d5212ebec1fa3aed6ab66205dcb88101a31",
+      "report_sha256": "d7e11d4786edaa7c4a7933e7d4a3ee510b97197d8f3c82a4760bc86a52718bfe",
       "required_assertions": [
         "atomic.foundations_are_canonical_and_projected",
-        "atomic.catalog_has_complete_hierarchy_and_safe_slots",
-        "atomic.sessions_preserve_level_scope_and_context",
-        "atomic.taste_brief_is_minimized_versioned_and_auditable",
-        "atomic.templates_and_pages_render_only_registered_structures",
-        "atomic.accessibility_and_responsive_states_hold_at_every_layer"
+        "atomic.catalog_slice_has_valid_hierarchy_and_safe_slots",
+        "atomic.sessions_preserve_level_scope_context_and_outcome",
+        "atomic.taste_brief_is_minimized_versioned_auditable_and_provider_bounded",
+        "atomic.taste_loop_runs_on_more_than_one_editable_subject",
+        "atomic.settings_page_uses_registered_compositions",
+        "atomic.settings_slice_has_basic_responsive_and_keyboard_proof"
       ]
     }
   ]

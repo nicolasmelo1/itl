@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 import itl_ai.main as main
 from itl_ai.memory.repository import PreferenceRepository
-from itl_ai.refine.catalog import VISUAL_VALUES
+from itl_ai.refine.catalog import visual_values
 from itl_ai.refine.providers import ProviderUnavailableError
 from itl_ai.refine.service import RefineService
 
@@ -78,7 +78,7 @@ def test_refine_critique_yields_reviewable_contextual_interpretation() -> None:
 
 def test_button_catalog_manifest_matches_the_python_visual_vocabulary() -> None:
     catalog = json.loads((Path(__file__).parents[3] / "contracts/catalog/button.v1.json").read_text())
-    assert {key: tuple(values) for key, values in catalog["appearance"].items()} == VISUAL_VALUES
+    assert {key: tuple(values) for key, values in catalog["appearance"].items()} == visual_values("Button")
 
 
 def test_button_directives_preserve_direction_and_recipes_are_coherent() -> None:
@@ -139,13 +139,17 @@ def test_candidate_acceptance_keeps_candidate_identity_separate_from_element_ide
 
 def test_provider_timeout_returns_unavailable_for_candidates_but_keeps_parse_fallback(tmp_path) -> None:
     class UnavailableProvider:
-        def generate_spec(self, prompt: str) -> str:
+        def generate_spec(self, prompt: str, target: str, taste_brief) -> str:
+            del taste_brief
             raise ProviderUnavailableError("timed out")
 
-        def parse_critique(self, request) -> str:
+        def parse_critique(self, request, component_type) -> str:
             raise ProviderUnavailableError("timed out")
 
-        def generate_candidate_patches(self, request, evidence, policies, repair_feedback=None) -> str:
+        def generate_candidate_patches(
+            self, request, component_type, taste_brief, policies, repair_feedback=None
+        ) -> str:
+            del taste_brief
             raise ProviderUnavailableError("timed out")
 
     main.refine_service = RefineService(PreferenceRepository(tmp_path / "preferences.sqlite"), UnavailableProvider())
@@ -177,10 +181,13 @@ def test_provider_timeout_returns_unavailable_for_candidates_but_keeps_parse_fal
 
 def test_parse_critique_accepts_a_provider_interpretation_wrapper(tmp_path) -> None:
     class WrappedInterpretationProvider:
-        def parse_critique(self, request) -> str:
+        def parse_critique(self, request, component_type) -> str:
             return json.dumps({"interpretation": interpretation()})
 
-        def generate_candidate_patches(self, request, evidence, policies, repair_feedback=None) -> None:
+        def generate_candidate_patches(
+            self, request, component_type, taste_brief, policies, repair_feedback=None
+        ) -> None:
+            del taste_brief
             return None
 
     main.refine_service = RefineService(

@@ -36,7 +36,12 @@ export type CardProps = {
 
 export type FormFieldProps = {
   label: string;
-  hint?: string;
+  hint?: string | null;
+  appearance: {
+    labelPlacement: "above" | "inline";
+    gap: "tight" | "regular" | "loose";
+    hintTone: "quiet" | "strong";
+  };
 };
 
 export type SettingsFormProps = {
@@ -109,12 +114,17 @@ export function Card({ children, ...props }: CardProps & { children?: ReactNode 
   );
 }
 
-export function FormField({ children, hint, label }: FormFieldProps & { children?: ReactNode }) {
+export function FormField({ appearance, children, hint, label }: FormFieldProps & { children?: ReactNode }) {
   return (
-    <section aria-label={label} className={styles.formField}>
+    <section
+      aria-label={label}
+      className={styles.formField}
+      data-gap={appearance.gap}
+      data-label-placement={appearance.labelPlacement}
+    >
       <div className={styles.formFieldHeader}>
         <strong>{label}</strong>
-        {hint ? <p>{hint}</p> : null}
+        {hint ? <p data-hint-tone={appearance.hintTone}>{hint}</p> : null}
       </div>
       {children}
     </section>

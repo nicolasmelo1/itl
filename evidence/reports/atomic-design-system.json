@@ -1,7 +1,7 @@
 {
   "scenario": "atomic-design-system",
   "status": "passed",
-  "goal": "Every Atomic Design layer is catalogued, composed safely, rendered accessibly, and conditioned by auditable contextual taste evidence.",
+  "goal": "The registered settings-page Atomic slice is composed safely, rendered accessibly, and conditioned by bounded contextual taste evidence.",
   "catalog": "contracts/catalog/atomic-design.v1.json",
   "assertions": [
     {
@@ -9,23 +9,27 @@
       "status": "passed"
     },
     {
-      "type": "atomic.catalog_has_complete_hierarchy_and_safe_slots",
+      "type": "atomic.catalog_slice_has_valid_hierarchy_and_safe_slots",
       "status": "passed"
     },
     {
-      "type": "atomic.sessions_preserve_level_scope_and_context",
+      "type": "atomic.sessions_preserve_level_scope_context_and_outcome",
       "status": "passed"
     },
     {
-      "type": "atomic.taste_brief_is_minimized_versioned_and_auditable",
+      "type": "atomic.taste_brief_is_minimized_versioned_auditable_and_provider_bounded",
       "status": "passed"
     },
     {
-      "type": "atomic.templates_and_pages_render_only_registered_structures",
+      "type": "atomic.taste_loop_runs_on_more_than_one_editable_subject",
       "status": "passed"
     },
     {
-      "type": "atomic.accessibility_and_responsive_states_hold_at_every_layer",
+      "type": "atomic.settings_page_uses_registered_compositions",
+      "status": "passed"
+    },
+    {
+      "type": "atomic.settings_slice_has_basic_responsive_and_keyboard_proof",
       "status": "passed"
     }
   ]

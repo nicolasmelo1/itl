@@ -1,18 +1,15 @@
-"""Typed HTTP models for the contextual Button refinement boundary."""
+"""Typed HTTP models for the contextual refinement boundary and its subjects."""
 
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Annotated, Literal, get_args
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 UI_SPEC_VERSION = "itl.ui/v1"
-VisualPath = Literal[
-    "/appearance/recipe",
-    "/appearance/size",
-    "/appearance/radius",
-    "/appearance/density",
-    "/appearance/fontWeight",
-]
+# A visual path is `/appearance/<token>`. Which tokens exist is a property of
+# the selected component, not of this type: see COMPONENT_REGISTRY below.
+VisualPath = Annotated[str, StringConstraints(pattern=r"^/appearance/[a-z][a-zA-Z0-9]*$")]
 
 
 class StrictModel(BaseModel):
@@ -61,6 +58,31 @@ class CardProps(StrictModel):
     emphasis: Literal["quiet", "raised"]
 
 
+class FormFieldAppearance(StrictModel):
+    labelPlacement: Literal["above", "inline"]
+    gap: Literal["tight", "regular", "loose"]
+    hintTone: Literal["quiet", "strong"]
+
+
+class FormFieldProps(StrictModel):
+    label: str = Field(min_length=1)
+    hint: str | None = None
+    appearance: FormFieldAppearance
+
+
+class SettingsFormProps(StrictModel):
+    title: str = Field(min_length=1)
+    description: str
+
+
+class SettingsTemplateProps(StrictModel):
+    title: str = Field(min_length=1)
+
+
+class ProjectSettingsPageProps(StrictModel):
+    title: str = Field(min_length=1)
+
+
 class ModelIssue(StrictModel):
     code: str
     message: str
@@ -92,6 +114,105 @@ class AtomicScope(StrictModel):
 
 
 DEFAULT_BUTTON_SCOPE = AtomicScope(level="atom", id="button", semanticRole="primary-action")
+
+
+def _appearance_vocabulary(model: type[BaseModel] | None) -> dict[str, tuple[str, ...]]:
+    """Derive the finite token vocabulary from the props schema itself.
+
+    A token therefore cannot exist for the model but not for the validator.
+    """
+    if model is None:
+        return {}
+    return {name: tuple(get_args(info.annotation)) for name, info in model.model_fields.items()}
+
+
+@dataclass(frozen=True)
+class ComponentEntry:
+    """One registered component: what it is, what it may hold, what may change."""
+
+    level: AtomicDesignLevel
+    props: type[StrictModel]
+    allowedChildTypes: tuple[str, ...] = ()
+    # Only a subject with an appearance model is editable by the Taste Loop.
+    appearance: type[StrictModel] | None = None
+    scopeId: str | None = None
+    orderedTokens: frozenset[str] = frozenset()
+
+    @property
+    def vocabulary(self) -> dict[str, tuple[str, ...]]:
+        return _appearance_vocabulary(self.appearance)
+
+    @property
+    def isEditable(self) -> bool:
+        """A subject is editable only if it has both a vocabulary and a scope."""
+        return self.appearance is not None and self.scopeId is not None
+
+
+COMPONENT_REGISTRY: dict[str, ComponentEntry] = {
+    "Button": ComponentEntry(
+        level="atom",
+        props=ButtonProps,
+        appearance=ButtonAppearance,
+        scopeId="button",
+        orderedTokens=frozenset({"size", "radius", "density", "fontWeight"}),
+    ),
+    "Input": ComponentEntry(level="atom", props=InputProps),
+    "Badge": ComponentEntry(level="atom", props=BadgeProps),
+    "Card": ComponentEntry(level="molecule", props=CardProps, allowedChildTypes=("Button", "Input", "Badge")),
+    "FormField": ComponentEntry(
+        level="molecule",
+        props=FormFieldProps,
+        allowedChildTypes=("Input",),
+        appearance=FormFieldAppearance,
+        scopeId="form-field",
+        orderedTokens=frozenset({"gap", "hintTone"}),
+    ),
+    "SettingsForm": ComponentEntry(
+        level="organism", props=SettingsFormProps, allowedChildTypes=("FormField", "Button", "Badge")
+    ),
+    "SettingsTemplate": ComponentEntry(
+        level="template", props=SettingsTemplateProps, allowedChildTypes=("SettingsForm",)
+    ),
+    "ProjectSettingsPage": ComponentEntry(
+        level="page", props=ProjectSettingsPageProps, allowedChildTypes=("SettingsTemplate",)
+    ),
+}
+EditableComponentType = Literal["Button", "FormField"]
+EDITABLE_COMPONENTS: dict[str, ComponentEntry] = {
+    name: entry for name, entry in COMPONENT_REGISTRY.items() if entry.isEditable
+}
+
+
+def scope_for_component(component_type: str, semantic_role: str | None = None) -> AtomicScope:
+    """The default learning subject for an editable component.
+
+    A session may narrow the scope ID to one instance or role — a save button in
+    settings is not the same subject as a hero call to action — but it may never
+    move the subject to another Atomic level.
+    """
+    entry = EDITABLE_COMPONENTS[component_type]
+    if entry.scopeId is None:
+        raise KeyError(f"{component_type} is registered without a learning scope.")
+    return AtomicScope(level=entry.level, id=entry.scopeId, semanticRole=semantic_role)
+
+
+def level_for_component(component_type: str) -> AtomicDesignLevel:
+    return EDITABLE_COMPONENTS[component_type].level
+
+
+TasteOutcome = Literal["accepted", "almost", "rejected", "indifferent", "manual_edit"]
+DEFAULT_EVENT_OUTCOMES: dict[str, TasteOutcome] = {
+    "candidate_acceptance": "accepted",
+    "almost": "almost",
+    "rejection": "rejected",
+    "indifference": "indifferent",
+    "manual_edit": "manual_edit",
+    "confirmed_critique": "manual_edit",
+    "explicit_attribute_feedback": "manual_edit",
+    "absolute_feedback": "manual_edit",
+    "pairwise_choice": "accepted",
+    "explore_more": "indifferent",
+}
 
 
 class PreferenceEvidence(StrictModel):
@@ -159,10 +280,13 @@ class Interpretation(StrictModel):
 
 
 class GenerateSpecRequest(StrictModel):
-    target: Literal["Button"] = "Button"
+    target: EditableComponentType = "Button"
     prompt: str = Field(default="A primary action", min_length=1, max_length=4_000)
     sessionId: str = Field(default="local", pattern=r"^[a-zA-Z0-9_-]{1,80}$")
     context: DesignContext
+    # Keep the Button default for the existing local laboratory, but never
+    # replace an explicitly supplied atomic subject during retrieval.
+    scope: AtomicScope = Field(default_factory=lambda: DEFAULT_BUTTON_SCOPE.model_copy(deep=True))
 
 
 class GenerateSpecResponse(StrictModel):
@@ -190,6 +314,7 @@ class GenerateVariantsRequest(StrictModel):
     includeWild: bool = False
     sessionId: str = Field(default="local", pattern=r"^[a-zA-Z0-9_-]{1,80}$")
     context: DesignContext
+    scope: AtomicScope = Field(default_factory=lambda: DEFAULT_BUTTON_SCOPE.model_copy(deep=True))
 
 
 class CandidateChange(StrictModel):
@@ -236,7 +361,7 @@ class PreferenceEventRequest(StrictModel):
     """An explicit, append-only action from the refinement UI."""
 
     sessionId: str = Field(default="local", pattern=r"^[a-zA-Z0-9_-]{1,80}$")
-    componentType: Literal["Button"] = "Button"
+    componentType: EditableComponentType = "Button"
     scope: AtomicScope = Field(default_factory=lambda: DEFAULT_BUTTON_SCOPE.model_copy(deep=True))
     context: DesignContext
     targetElementId: str = Field(pattern=r"^[a-z][a-z0-9-]*$")
@@ -252,6 +377,10 @@ class PreferenceEventRequest(StrictModel):
         "indifference",
         "explore_more",
     ]
+    # New callers should send this explicit result. The compatibility mapping
+    # below preserves historical local events while ensuring retrieval never
+    # has an outcome-less decision.
+    outcome: TasteOutcome | None = None
     source: Literal[
         "manual_edit",
         "confirmed_critique",
@@ -272,14 +401,25 @@ class PreferenceEventRequest(StrictModel):
 
     @model_validator(mode="after")
     def scope_matches_the_current_component_catalog(self) -> "PreferenceEventRequest":
-        if self.componentType == "Button" and self.scope.level != "atom":
-            raise ValueError("Button preference events must use an atom-level scope.")
+        """Keep one subject per scope so retrieval cannot silently merge them."""
+        level = level_for_component(self.componentType)
+        if self.scope.level != level:
+            raise ValueError(f"{self.componentType} preference events must use a {level}-level scope.")
+        if self.outcome is None:
+            self.outcome = DEFAULT_EVENT_OUTCOMES[self.action]
         return self
 
 
 class PreferenceEventResponse(StrictModel):
     id: int
     createdAt: datetime
+
+
+class ObservedAppearance(StrictModel):
+    """The catalog appearance of the component a person actually looked at."""
+
+    componentType: EditableComponentType
+    appearance: dict[str, str]
 
 
 class RetrievedEvidence(StrictModel):
@@ -293,12 +433,20 @@ class RetrievedEvidence(StrictModel):
     critique: str | None = None
     # This is a retrieval projection, not a second memory store.  It makes the
     # concrete design that received feedback available to the next generation.
-    outcome: Literal["accepted", "almost", "rejected", "indifferent", "manual_edit"] | None = None
-    observedAppearance: ButtonAppearance | None = None
+    outcome: TasteOutcome
+    observedAppearance: ObservedAppearance | None = None
     diff: list[SpecDiff] = []
     candidateId: str | None = None
     directives: list[AttributeDirective] = []
     parserInterpretation: Interpretation | None = None
+
+
+class TasteStimulus(StrictModel):
+    """The bounded visual treatment that was actually shown to the person."""
+
+    componentType: EditableComponentType
+    appearance: dict[str, str]
+    candidateId: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]*$")
 
 
 class TasteBriefDecision(StrictModel):
@@ -308,14 +456,18 @@ class TasteBriefDecision(StrictModel):
     scope: AtomicScope | None = None
     contextRelation: Literal["exact", "compatible", "global", "mismatch"]
     preferenceRelation: Literal["supporting", "conflicting", "unknown"]
+    outcome: TasteOutcome
+    # A row whose snapshot no longer holds a readable subject carries no
+    # stimulus. An invented neutral appearance would be indistinguishable from
+    # a real one in the prompt.
+    stimulus: TasteStimulus | None = None
     source: str
     strength: Literal["weak", "moderate", "strong"]
-    evidence: PreferenceEvidence
     directives: list[AttributeDirective] = []
 
 
 class TasteBrief(StrictModel):
-    version: Literal["itl.taste-brief/v1"] = "itl.taste-brief/v1"
+    version: Literal["itl.taste-brief/v3"] = "itl.taste-brief/v3"
     scope: AtomicScope
     context: DesignContext
     evidenceIds: list[int]
@@ -325,6 +477,7 @@ class TasteBrief(StrictModel):
 class MemoryQuery(StrictModel):
     context: DesignContext
     evidence: PreferenceEvidence = PreferenceEvidence()
+    componentType: EditableComponentType = "Button"
     scope: AtomicScope = Field(default_factory=lambda: DEFAULT_BUTTON_SCOPE.model_copy(deep=True))
 
 

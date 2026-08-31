@@ -132,11 +132,11 @@ test("button.web_uses_api_and_typed_context", async () => {
   const fetchMock = installRefineApi();
   render(<ControlledCanvas locale="en" />);
   expect(screen.getByRole("region", { name: "Preview" })).toBeDefined();
-  expect(screen.getByRole("region", { name: "hero Button surface" })).toBeDefined();
+  expect(screen.getByRole("region", { name: "hero design surface" })).toBeDefined();
   fireEvent.click(screen.getByRole("button", { name: "toolbar" }));
-  expect(screen.getByRole("region", { name: "toolbar Button surface" })).toBeDefined();
+  expect(screen.getByRole("region", { name: "toolbar design surface" })).toBeDefined();
   fireEvent.click(screen.getByRole("button", { name: "form" }));
-  expect(screen.getByRole("region", { name: "form Button surface" })).toBeDefined();
+  expect(screen.getByRole("region", { name: "form design surface" })).toBeDefined();
   fireEvent.change(screen.getByLabelText("Critique"), { target: { value: "It is too rounded." } });
   fireEvent.click(screen.getByRole("button", { name: "Review interpretation" }));
   expect(await screen.findByRole("region", { name: "Review refinement interpretation" })).toBeDefined();
@@ -144,12 +144,42 @@ test("button.web_uses_api_and_typed_context", async () => {
   expect(screen.getAllByRole("checkbox")).toHaveLength(5);
   fireEvent.click(screen.getByRole("button", { name: "Generate constrained alternatives" }));
   expect(await screen.findByRole("region", { name: "Constrained alternatives" })).toBeDefined();
-  expect(screen.getAllByRole("region", { name: "form Button surface" })).toHaveLength(3);
+  expect(screen.getAllByRole("region", { name: "form design surface" })).toHaveLength(3);
   const preferenceRequest = fetchMock.mock.calls.find(([url]) => String(url).endsWith("/v1/preference-events"));
   expect(preferenceRequest).toBeDefined();
   const requestBody = JSON.parse(String(preferenceRequest?.[1]?.body)) as Record<string, unknown>;
   expect(requestBody).not.toHaveProperty("interpretation");
   expect(requestBody).toHaveProperty("parserInterpretation");
+});
+
+test("taste_loop.canvas_refines_a_second_subject_at_another_level", () => {
+  installRefineApi();
+  render(<ControlledCanvas locale="en" />);
+
+  expect(screen.getByLabelText("Edit radius")).toBeDefined();
+  fireEvent.click(screen.getByText("Account email"));
+
+  expect(screen.getByTestId("selected-element").textContent).toContain("email-field");
+  expect(screen.getByLabelText("Edit gap")).toBeDefined();
+  expect(screen.getByLabelText("Edit labelPlacement")).toBeDefined();
+  expect(screen.queryByLabelText("Edit radius")).toBeNull();
+});
+
+test("taste_loop.a_molecule_edit_is_recorded_under_its_own_subject_and_level", () => {
+  const fetchMock = installRefineApi();
+  render(<ControlledCanvas locale="en" />);
+  fireEvent.click(screen.getByText("Account email"));
+
+  fireEvent.change(screen.getByLabelText("Edit gap"), { target: { value: "tight" } });
+
+  const body = fetchMock.mock.calls
+    .map(([, init]) => JSON.parse(String(init?.body)) as Record<string, unknown>)
+    .find((request) => request.action === "manual_edit");
+  expect(body).toMatchObject({
+    componentType: "FormField",
+    scope: { level: "molecule", id: "email-field" },
+    targetElementId: "email-field",
+  });
 });
 
 test("button.web_does_not_submit_an_empty_critique", () => {

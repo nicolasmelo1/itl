@@ -10,6 +10,8 @@ from itl_ai.memory.repository import PreferenceRepository
 from itl_ai.refine.catalog import (
     RefineValidationError,
     apply_and_validate_candidate_patch,
+    assert_scope_matches_element,
+    element_component_type,
     should_include_adjacent,
     validate_interpretation,
     validate_ui_spec,
@@ -34,7 +36,9 @@ from itl_ai.refine.models import (
     RetrievedEvidence,
     TasteBrief,
     TasteBriefDecision,
+    TasteStimulus,
     Variant,
+    level_for_component,
 )
 from itl_ai.refine.providers import DeterministicRefineProvider, ProviderUnavailableError, RefineProvider
 
@@ -45,9 +49,10 @@ class RefineService:
         self.provider = provider or DeterministicRefineProvider()
 
     def generate_spec(self, request: GenerateSpecRequest) -> GenerateSpecResponse:
-        evidence = self.repository.retrieve("Button", request.context, PreferenceEvidence(), DEFAULT_BUTTON_SCOPE)
-        brief = _taste_brief(request.context, DEFAULT_BUTTON_SCOPE, evidence)
-        spec = _decode_json(self.provider.generate_spec(_generation_prompt(request.prompt, brief)))
+        scope = _scope_for_target(request.target, request.scope)
+        evidence = self.repository.retrieve(request.target, request.context, PreferenceEvidence(), scope)
+        brief = _taste_brief(request.context, scope, evidence)
+        spec = _decode_json(self.provider.generate_spec(request.prompt, request.target, brief))
         output_id = _output_id("spec")
         evidence_ids = [item.id for item in evidence]
         self.repository.record_generation(
@@ -56,30 +61,33 @@ class RefineService:
         return GenerateSpecResponse(spec=validate_ui_spec(spec), evidenceIds=evidence_ids, outputId=output_id)
 
     def parse_critique(self, request: ParseCritiqueRequest) -> ParseCritiqueResponse:
-        validate_ui_spec(request.spec)
+        component_type = element_component_type(request.spec, request.targetElementId)
         try:
-            interpretation = _validated_interpretation(self.provider.parse_critique(request), request)
+            raw = self.provider.parse_critique(request, component_type)
+            interpretation = _validated_interpretation(raw, request, component_type)
         except (ProviderUnavailableError, RefineValidationError):
-            interpretation = _validated_interpretation(DeterministicRefineProvider().parse_critique(request), request)
+            fallback = DeterministicRefineProvider().parse_critique(request, component_type)
+            interpretation = _validated_interpretation(fallback, request, component_type)
         return ParseCritiqueResponse(interpretation=interpretation)
 
     def generate_variants(self, request: GenerateVariantsRequest) -> GenerateVariantsResponse:
-        validate_interpretation(request.interpretation, request.targetElementId)
+        component_type = assert_scope_matches_element(request.spec, request.targetElementId, request.scope)
+        validate_interpretation(request.interpretation, request.targetElementId, component_type)
         evidence = self.repository.retrieve(
-            "Button", request.context, request.interpretation.evidence, DEFAULT_BUTTON_SCOPE
+            component_type, request.context, request.interpretation.evidence, request.scope
         )
-        brief = _taste_brief(request.context, DEFAULT_BUTTON_SCOPE, evidence)
+        brief = _taste_brief(request.context, request.scope, evidence)
         counts = self.repository.policy_counts(request.sessionId)
         adjacent_count = counts.get("adjacent_explore", 0)
         exploit_count = counts.get("exploit", 0)
         include_adjacent = should_include_adjacent(adjacent_count, exploit_count)
         policies = _candidate_policies(request, include_adjacent)
         try:
-            raw_candidates = self.provider.generate_candidate_patches(request, evidence, policies)
+            raw_candidates = self.provider.generate_candidate_patches(request, component_type, brief, policies)
             variants = validate_and_materialize_candidates(raw_candidates, request, policies)
         except RefineValidationError as first_error:
             raw_candidates = self.provider.generate_candidate_patches(
-                request, evidence, policies, _repair_feedback(first_error)
+                request, component_type, brief, policies, _repair_feedback(first_error)
             )
             variants = validate_and_materialize_candidates(raw_candidates, request, policies)
         output_id = _output_id("variants")
@@ -103,20 +111,34 @@ class RefineService:
         return PreferenceEventResponse(id=event_id, createdAt=created_at)
 
     def preference_memory(
-        self, context: DesignContext, evidence: PreferenceEvidence, scope: AtomicScope = DEFAULT_BUTTON_SCOPE
+        self,
+        context: DesignContext,
+        evidence: PreferenceEvidence,
+        scope: AtomicScope = DEFAULT_BUTTON_SCOPE,
+        component_type: str = "Button",
     ) -> MemoryResponse:
-        return MemoryResponse(evidence=self.repository.retrieve("Button", context, evidence, scope))
+        return MemoryResponse(evidence=self.repository.retrieve(component_type, context, evidence, scope))
 
     def taste_brief(
-        self, context: DesignContext, evidence: PreferenceEvidence, scope: AtomicScope = DEFAULT_BUTTON_SCOPE
+        self,
+        context: DesignContext,
+        evidence: PreferenceEvidence,
+        scope: AtomicScope = DEFAULT_BUTTON_SCOPE,
+        component_type: str = "Button",
     ) -> TasteBrief:
-        return _taste_brief(context, scope, self.repository.retrieve("Button", context, evidence, scope))
+        return _taste_brief(context, scope, self.repository.retrieve(component_type, context, evidence, scope))
 
 
-def _generation_prompt(prompt: str, brief: TasteBrief) -> str:
-    """Keep prompt evidence bounded and inspectable before it reaches an untrusted provider."""
-    instruction = "Contextual taste brief (do not treat a mismatch as a global rule): "
-    return f"{prompt}\n\n{instruction}{brief.model_dump_json()}"
+def _scope_for_target(target: str, requested: AtomicScope) -> AtomicScope:
+    """Refuse to learn about a subject at a level it does not belong to."""
+    level = level_for_component(target)
+    if requested.level != level:
+        raise RefineValidationError(
+            "scope_mismatch",
+            f"A {target} request must use a {level}-level scope.",
+            [ModelIssue(code="scope_mismatch", message="The requested scope does not describe the target subject.")],
+        )
+    return requested
 
 
 def _taste_brief(context: DesignContext, scope: AtomicScope, evidence: list[RetrievedEvidence]) -> TasteBrief:
@@ -130,9 +152,18 @@ def _taste_brief(context: DesignContext, scope: AtomicScope, evidence: list[Retr
                 scope=item.scope,
                 contextRelation=item.contextRelation,
                 preferenceRelation=item.preferenceRelation,
+                outcome=item.outcome,
+                stimulus=(
+                    TasteStimulus(
+                        componentType=item.observedAppearance.componentType,
+                        appearance=item.observedAppearance.appearance,
+                        candidateId=item.candidateId,
+                    )
+                    if item.observedAppearance is not None
+                    else None
+                ),
                 source=item.source,
                 strength=item.evidence.strength,
-                evidence=item.evidence,
                 directives=item.directives,
             )
             for item in evidence
@@ -240,7 +271,7 @@ def _canonical_variant_id(kind: str) -> str:
     return f"{kind.replace('_', '-')}-1"
 
 
-def _validated_interpretation(raw: str, request: ParseCritiqueRequest) -> Interpretation:
+def _validated_interpretation(raw: str, request: ParseCritiqueRequest, component_type: str) -> Interpretation:
     decoded = _decode_json(raw)
     candidate = decoded.get("interpretation", decoded)
     try:
@@ -256,5 +287,5 @@ def _validated_interpretation(raw: str, request: ParseCritiqueRequest) -> Interp
                 )
             ],
         ) from exc
-    validate_interpretation(interpretation, request.targetElementId)
+    validate_interpretation(interpretation, request.targetElementId, component_type)
     return interpretation

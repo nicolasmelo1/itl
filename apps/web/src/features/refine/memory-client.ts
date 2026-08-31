@@ -1,6 +1,12 @@
 import type { UISpec } from "@itl/ui-catalog";
 
-import type { AttributeDirective, DesignContext, Interpretation, PreferenceEvidence } from "./refine-engine";
+import type {
+  AtomicScope,
+  AttributeDirective,
+  DesignContext,
+  Interpretation,
+  PreferenceEvidence,
+} from "./refine-engine";
 
 type MemoryAction =
   | "manual_edit"
@@ -27,13 +33,8 @@ export type RetrievedObservation = {
   contextRelation: "exact" | "compatible" | "global" | "mismatch";
   outcome: "accepted" | "almost" | "rejected" | "indifferent" | "manual_edit" | null;
   context: DesignContext | null;
-  observedAppearance: {
-    recipe: string;
-    size: string;
-    radius: string;
-    density: string;
-    fontWeight: string;
-  } | null;
+  // The shown treatment is whatever vocabulary the observed subject has.
+  observedAppearance: { componentType: string; appearance: Record<string, string> } | null;
 };
 
 export async function recordPreferenceEvent(input: {
@@ -42,6 +43,8 @@ export async function recordPreferenceEvent(input: {
   beforeSpec: UISpec;
   afterSpec?: UISpec;
   targetElementId: string;
+  componentType: "Button" | "FormField";
+  scope: AtomicScope;
   context: DesignContext;
   evidence?: PreferenceEvidence;
   directives?: AttributeDirective[];
@@ -60,7 +63,6 @@ export async function recordPreferenceEvent(input: {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sessionId: "local",
-          componentType: "Button",
           ...event,
           evidence: input.evidence ?? interpretation?.evidence ?? emptyEvidence(input.action),
           directives: input.directives ?? interpretation?.directives ?? [],
@@ -77,6 +79,8 @@ export async function recordPreferenceEvent(input: {
 
 export async function retrievePreferenceMemory(input: {
   context: DesignContext;
+  componentType: "Button" | "FormField";
+  scope: AtomicScope;
   evidence?: PreferenceEvidence;
 }): Promise<RetrievedObservation[]> {
   if (typeof window === "undefined" || typeof fetch === "undefined") return [];
@@ -88,6 +92,8 @@ export async function retrievePreferenceMemory(input: {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           context: input.context,
+          componentType: input.componentType,
+          scope: input.scope,
           evidence: input.evidence ?? emptyEvidence("indifference"),
         }),
       },

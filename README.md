@@ -1,10 +1,10 @@
 # Interactive Taste Learning (ITL)
 
-ITL is a local laboratory for learning a person's UI taste through a constrained refinement loop. Today it deliberately edits only one component—`Button`—as the first atom in an Atomic Design progression. A short session starts with foundations (type, spacing, borders and focus), refines one atom, then eventually composes molecules, organisms, templates, and pages. The goal is not a generic style score: it is contextual, reviewable taste evidence that can later guide UI-generation prompts.
+ITL is a local laboratory for learning a person's UI taste through a constrained refinement loop. It edits registered subjects at two Atomic Design levels today—the `Button` atom and the `FormField` molecule—through one catalog-derived loop. A short session starts with foundations (type, spacing, borders and focus), refines one subject, then eventually composes organisms, templates, and pages. The goal is not a generic style score: it is contextual, reviewable taste evidence that can later guide UI-generation prompts.
 
-The browser renders a finite, schema-validated JSON UI spec. A person selects the Button in a toolbar, hero, or form, writes a critique, reviews the interpreted visual directives, then asks the API for constrained alternatives. Explicit actions are recorded as append-only SQLite events with typed role, surface, density, evidence, directives, and a spec diff.
+The browser renders a finite, schema-validated JSON UI spec. A person selects an editable component in a toolbar, hero, or form, writes a critique, reviews the interpreted visual directives, then asks the API for constrained alternatives. Explicit actions are recorded as append-only SQLite events with typed role, surface, density, evidence, directives, and a spec diff.
 
-The application is deliberately narrow at this stage: Button only, controlled JSON UI specs (never screenshots), deterministic validation, and no global "beauty" score or vector database. The complete target architecture is documented in [the Atomic Design system](docs/atomic-design-system.md) and its [versioned catalog contract](contracts/catalog/atomic-design.v1.json). Delivery happens in 20–40 minute loops, but the system's target includes every layer through concrete pages.
+The application is deliberately narrow at this stage: two registered editable subjects, controlled JSON UI specs (never screenshots), deterministic validation, and no global "beauty" score or vector database. Each subject's evidence is retrieved separately: an atom decision never becomes a molecule rule by accident. The complete target architecture is documented in [the Atomic Design system](docs/atomic-design-system.md) and its [versioned catalog contract](contracts/catalog/atomic-design.v1.json). Delivery happens in 20–40 minute loops, but the system's target includes every layer through concrete pages.
 
 ## Quickstart
 
@@ -43,7 +43,7 @@ Open `http://localhost:3000`.
 
 ### 4. Run one refinement session
 
-1. Leave the `Continue` button selected.
+1. Leave the `Continue` button selected, or click the `Account email` field to refine the molecule instead.
 2. Choose a toolbar, hero, or form surface, then enter a critique such as: “I like the recipe and spacing, but it is too rounded.”
 3. Click **Review interpretation**. This is transient: no preference event is stored yet.
 4. Adjust Keep/Explore if necessary and click **Generate constrained alternatives**. This confirms the critique and persists `confirmed_critique`; a parser result alone is never stored as evidence.
@@ -54,12 +54,12 @@ The browser sends interpretation and variant generation to FastAPI. TypeScript o
 ## How it works
 
 ```text
-Button spec → critique → review → model candidate patches → deterministic materialization → candidates → explicit event
+subject spec → critique → review → model candidate patches → deterministic materialization → candidates → explicit event
                                      │                         │                                  │
                                      └── context + evidence ───┴──────── deterministic validation ──┘
 ```
 
-- The editable vocabulary is finite and visual only. The model chooses combinations from the Button catalog, but cannot provide CSS, colors, content, semantic state, or unregistered components. Every patch is checked for schema, catalog values, directives, locks, untouched content/state, and duplicate candidates before rendering.
+- The editable vocabulary is finite, visual only, and per subject: a Button has `recipe`, `size`, `radius`, `density` and `fontWeight`; a FormField has `labelPlacement`, `gap` and `hintTone`. The model chooses combinations from the selected subject's catalog, but cannot provide CSS, colors, content, semantic state, or unregistered components. Every patch is checked for schema, catalog values, directives, locks, untouched content/state, and duplicate candidates before rendering.
 - A raw event is never overwritten. Direct edits have stronger evidence than an inferred critique.
 - Context is retained as role, surface, and density. Retrieval independently reports exact/compatible/global/mismatch context and supporting/conflicting/unknown preference relations.
 
@@ -111,6 +111,7 @@ pnpm verify:controlled-ui-language
 pnpm verify:memory-exploration-validation
 pnpm verify:button-contextual-lab
 pnpm verify:atomic-foundations
-# Completion gate for Plan 06; remains intentionally red until every required layer is implemented.
+# Completion gate for Plans 06 and 07; it proves the registered slice and the multi-subject loop,
+# not the full catalog inventory.
 pnpm verify:atomic-design-system
 ```
