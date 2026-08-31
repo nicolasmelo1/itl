@@ -3,6 +3,7 @@ from pathlib import Path
 
 from itl_ai.memory.repository import PreferenceRepository
 from itl_ai.refine.models import (
+    AtomicScope,
     DecreaseDirective,
     DesignContext,
     GenerateVariantsRequest,
@@ -129,7 +130,8 @@ def test_retrieval_projects_the_concrete_design_and_auditable_feedback(tmp_path:
     assert retrieved.outcome == "accepted"
     assert retrieved.candidateId == "exploit-1"
     assert retrieved.observedAppearance is not None
-    assert retrieved.observedAppearance.radius == "pill"
+    assert retrieved.observedAppearance.componentType == "Button"
+    assert retrieved.observedAppearance.appearance["radius"] == "pill"
     assert [(change.path, change.before, change.after) for change in retrieved.diff] == [
         ("/elements/continue-button/props/appearance/radius", "soft", "pill")
     ]
@@ -154,8 +156,46 @@ def test_retrieval_projects_almost_and_rejected_candidate_appearances(tmp_path: 
         )
 
     retrieved = refine.preference_memory(context("hero"), PreferenceEvidence()).evidence
-    outcomes = {item.outcome: item.observedAppearance.radius for item in retrieved if item.observedAppearance}
+    outcomes = {
+        item.outcome: item.observedAppearance.appearance["radius"] for item in retrieved if item.observedAppearance
+    }
     assert outcomes == {"almost": "square", "rejected": "pill"}
+
+
+def test_relevance_ranks_a_high_confidence_rejection_without_changing_its_polarity(tmp_path: Path) -> None:
+    refine, _ = service(tmp_path)
+    scope = AtomicScope(level="atom", id="hero-continue-button", semanticRole="primary-action")
+    refine.record_preference_event(
+        PreferenceEventRequest(
+            componentType="Button",
+            scope=scope,
+            context=context("hero"),
+            targetElementId="continue-button",
+            action="candidate_acceptance",
+            source="candidate_acceptance",
+            beforeSpec=button_spec("square"),
+            candidateId="accepted-square",
+            evidence=PreferenceEvidence(strength="weak"),
+        )
+    )
+    rejected = refine.record_preference_event(
+        PreferenceEventRequest(
+            componentType="Button",
+            scope=scope,
+            context=context("hero"),
+            targetElementId="continue-button",
+            action="rejection",
+            source="manual_edit",
+            beforeSpec=button_spec("pill"),
+            candidateId="rejected-pill",
+            evidence=PreferenceEvidence(strength="strong"),
+        )
+    )
+
+    evidence = refine.preference_memory(context("hero"), PreferenceEvidence(), scope).evidence
+    assert evidence[0].id == rejected.id
+    assert evidence[0].outcome == "rejected"
+    assert evidence[0].preferenceRelation == "unknown"
 
 
 def test_wild_policy_preserves_explicit_keeps(tmp_path: Path) -> None:
@@ -188,7 +228,8 @@ def test_wild_policy_preserves_explicit_keeps(tmp_path: Path) -> None:
 
 def test_live_provider_candidates_are_used_when_they_are_valid_and_distinct(tmp_path: Path) -> None:
     class ModelProvider:
-        def generate_candidate_patches(self, request, evidence, policies, repair_feedback=None):
+        def generate_candidate_patches(self, request, component_type, taste_brief, policies, repair_feedback=None):
+            del taste_brief
             return json.dumps(
                 {
                     "candidates": [
@@ -237,7 +278,8 @@ def test_invalid_candidate_patches_are_repaired_once_before_rendering(tmp_path: 
     class RepairingProvider:
         calls = 0
 
-        def generate_candidate_patches(self, request, evidence, policies, repair_feedback=None):
+        def generate_candidate_patches(self, request, component_type, taste_brief, policies, repair_feedback=None):
+            del taste_brief
             self.calls += 1
             value = "ghost" if repair_feedback is None else "primary"
             return json.dumps(

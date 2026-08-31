@@ -11,17 +11,17 @@ export type Messages = {
   surfaces: Record<"toolbar" | "hero" | "form", string>;
   preview: string;
   previewHint: string;
-  buttonSurface: (surface: string) => string;
+  subjectSurface: (surface: string) => string;
   projectSettings: string;
   heroTagline: string;
   heroTitle: string;
   emailAddress: string;
   emailPlaceholder: string;
   selectedElement: string;
-  selectButton: string;
+  selectSubject: string;
   feedback: string;
   feedbackHint: string;
-  noButton: string;
+  noSubject: string;
   reactions: string;
   reactionLabels: string[];
   critique: string;
@@ -70,17 +70,17 @@ export const messages: Record<Locale, Messages> = {
     surfaces: { toolbar: "toolbar", hero: "hero", form: "form" },
     preview: "Preview",
     previewHint: "Select the Button in this live UI to refine it.",
-    buttonSurface: (surface) => `${surface} Button surface`,
+    subjectSurface: (surface) => `${surface} design surface`,
     projectSettings: "Project settings",
     heroTagline: "Make each interaction intentional.",
     heroTitle: "Build a calmer workflow",
     emailAddress: "Email address",
     emailPlaceholder: "you@example.com",
     selectedElement: "Selected element",
-    selectButton: "Select a Button before submitting feedback.",
+    selectSubject: "Select an editable component before submitting feedback.",
     feedback: "Feedback",
     feedbackHint: "Feedback can change only visual appearance; its label, role, and state are not taste dimensions.",
-    noButton: "Select the Button to refine it. This laboratory edits one component only.",
+    noSubject: "Select an editable component to refine it. Structure elements are not refinable subjects.",
     reactions: "Absolute feedback",
     reactionLabels: ["like", "almost", "indifferent", "dislike"],
     critique: "Critique",
@@ -127,17 +127,17 @@ export const messages: Record<Locale, Messages> = {
     surfaces: { toolbar: "barra de ferramentas", hero: "destaque", form: "formulário" },
     preview: "Pré-visualização",
     previewHint: "Selecione o botão nesta interface para refiná-lo.",
-    buttonSurface: (surface) => `Área do botão: ${surface}`,
+    subjectSurface: (surface) => `Área de design: ${surface}`,
     projectSettings: "Configurações do projeto",
     heroTagline: "Faça cada interação ser intencional.",
     heroTitle: "Construa um fluxo de trabalho mais calmo",
     emailAddress: "Endereço de e-mail",
     emailPlaceholder: "voce@exemplo.com",
     selectedElement: "Elemento selecionado",
-    selectButton: "Selecione um botão antes de enviar o feedback.",
+    selectSubject: "Selecione um componente editável antes de enviar o feedback.",
     feedback: "Feedback",
     feedbackHint: "O feedback altera somente a aparência visual; rótulo, função e estado não são dimensões de gosto.",
-    noButton: "Selecione o botão para refiná-lo. Este laboratório edita apenas um componente.",
+    noSubject: "Selecione um componente editável para refiná-lo. Elementos de estrutura não são sujeitos refináveis.",
     reactions: "Avaliação geral",
     reactionLabels: ["gosto", "quase", "indiferente", "não gosto"],
     critique: "Comentário",

@@ -1,6 +1,6 @@
 import { type UISpec, validateUISpec } from "@itl/ui-catalog";
 
-import type { DesignContext, Interpretation, RefineVariant } from "./refine-engine";
+import type { AtomicScope, DesignContext, Interpretation, RefineVariant } from "./refine-engine";
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_AI_BASE_URL ?? "http://127.0.0.1:8000";
 
@@ -40,6 +40,7 @@ export async function generateVariants(request: {
   interpretation: Interpretation;
   includeWild: boolean;
   context: DesignContext;
+  scope: AtomicScope;
 }): Promise<RefineVariant[]> {
   const response = await post<{ variants: Array<Omit<RefineVariant, "spec"> & { spec: unknown }> }>(
     "/v1/refine/generate-variants",

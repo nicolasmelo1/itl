@@ -15,6 +15,7 @@ a global rule.
 | 4 | [04-memory-exploration-validation.md](04-memory-exploration-validation.md) — persist evidence and validate safe exploration | A later generation uses relevant prior evidence, records exploration separately, and passes the MVP evaluation suite. |
 | 5 | [05-button-contextual-lab.md](05-button-contextual-lab.md) — make Button a contextual, semantic preference laboratory | Directives, recipes, typed contexts, and one web→API refinement path are proven before another editable component exists. |
 | 6 | [06-atomic-composition-loop.md](06-atomic-composition-loop.md) — build an Atomic vertical slice and contextual Taste Loop | One registered settings-page slice proves scoped retrieval, outcome-preserving TasteBriefs, and provider-bounded generation. |
+| 7 | [07-multi-component-taste.md](07-multi-component-taste.md) — acquire taste over a heterogeneous stimulus panel and test whether it generalizes | A session over dozens of components exports a portable `.taste`, and the harness reports held-out prediction against no-memory and raw-retrieval baselines, including on components never judged. |
 
 ## Parked
 
@@ -22,5 +23,5 @@ a global rule.
 | --- | --- |
 | Learned prompt compiler or production personalization | Several completed, reviewed composition sessions plus a held-out human evaluation set. |
 | GEPA compilation of DSPy modules | A held-out labelled dataset and a task-specific deterministic or human-grounded metric. |
-| Held-out taste-loop evaluation | Completion of Plan 06’s scoped, provider-bounded feedback loop and enough human-reviewed sessions. |
+| Foundation-token learning and the remaining catalog | A positive held-out result from Plan 07. |
 | VLM visual judging and visual regression baselines | A stable component catalog plus a decision about the target browser/CI runner. |

@@ -23,6 +23,23 @@ export const buttonAppearanceValues = {
   fontWeight: ["regular", "semibold"],
 } as const;
 
+export const formFieldAppearanceValues = {
+  labelPlacement: ["above", "inline"],
+  gap: ["tight", "regular", "loose"],
+  hintTone: ["quiet", "strong"],
+} as const;
+
+/**
+ * Every editable Taste Loop subject and its finite visual vocabulary. A
+ * component is refinable if and only if it appears here.
+ */
+export const componentAppearanceValues = {
+  Button: buttonAppearanceValues,
+  FormField: formFieldAppearanceValues,
+} as const;
+export type EditableComponentType = keyof typeof componentAppearanceValues;
+export const editableComponentTypes = Object.keys(componentAppearanceValues) as EditableComponentType[];
+
 export const buttonCatalogManifest = {
   version: "itl.catalog/button.v1",
   component: "Button",
@@ -79,9 +96,17 @@ const cardPropsSchema = z
   })
   .strict();
 
+const formFieldAppearanceSchema = z.object({
+  labelPlacement: z.enum(formFieldAppearanceValues.labelPlacement),
+  gap: z.enum(formFieldAppearanceValues.gap),
+  hintTone: z.enum(formFieldAppearanceValues.hintTone),
+}).strict();
+
 const formFieldPropsSchema = z.object({
   label: z.string().min(1),
-  hint: z.string().min(1).optional(),
+  // The API materializes an absent hint as null, so both spellings validate.
+  hint: z.string().min(1).nullish(),
+  appearance: formFieldAppearanceSchema,
 }).strict();
 
 const settingsFormPropsSchema = z.object({
@@ -258,7 +283,7 @@ export const componentMetadata: Record<ComponentType, CatalogMetadata> = {
   },
   FormField: {
     level: "molecule",
-    editablePropPaths: ["/label", "/hint"],
+    editablePropPaths: ["/appearance/labelPlacement", "/appearance/gap", "/appearance/hintTone"],
     allowedChildTypes: ["Input"],
   },
   SettingsForm: {
@@ -418,6 +443,48 @@ export const buttonFixtureSpec: UISpec = {
   elements: { "continue-button": fixtureSpec.elements["continue-button"] },
 };
 
+/**
+ * The refinement canvas needs more than one editable subject in one spec, at
+ * two Atomic levels, so a session can move between them without reloading.
+ */
+export const refineFixtureSpec: UISpec = {
+  version: UI_SPEC_VERSION,
+  root: "account-settings",
+  elements: {
+    "account-settings": {
+      type: "SettingsForm",
+      props: { title: "Account", description: "Choose where project updates are sent." },
+      children: ["email-field", "continue-button"],
+    },
+    "email-field": {
+      type: "FormField",
+      props: {
+        label: "Account email",
+        hint: "We use this address for essential project notifications.",
+        appearance: { labelPlacement: "above", gap: "regular", hintTone: "quiet" },
+      },
+      children: ["account-email"],
+    },
+    "account-email": {
+      type: "Input",
+      props: { label: "Email address", placeholder: "you@example.com", value: "", tone: "quiet", state: "default" },
+      children: [],
+    },
+    "continue-button": fixtureSpec.elements["continue-button"],
+  },
+};
+
+export function isEditableComponentType(type: string): type is EditableComponentType {
+  return type in componentAppearanceValues;
+}
+
+/** The visual vocabulary of one element, or undefined when it is structure. */
+export function appearanceValuesFor(spec: UISpec, elementId: string) {
+  const element = spec.elements[elementId];
+  if (!element || !isEditableComponentType(element.type)) return undefined;
+  return componentAppearanceValues[element.type];
+}
+
 export const projectSettingsFixtureSpec: UISpec = {
   version: UI_SPEC_VERSION,
   root: "project-settings-page",
@@ -439,7 +506,11 @@ export const projectSettingsFixtureSpec: UISpec = {
     },
     "email-field": {
       type: "FormField",
-      props: { label: "Account email", hint: "We use this address for essential project notifications." },
+      props: {
+        label: "Account email",
+        hint: "We use this address for essential project notifications.",
+        appearance: { labelPlacement: "above", gap: "regular", hintTone: "quiet" },
+      },
       children: ["account-email"],
     },
     "account-email": {

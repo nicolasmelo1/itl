@@ -147,3 +147,21 @@
   padding: clamp(var(--space-14), 4vw, calc(var(--space-14) * 3));
   place-items: start center;
 }
+
+@media (max-width: 30rem) {
+  .projectSettingsPage { padding: var(--space-8); }
+  .settingsForm { gap: var(--space-10); padding: var(--space-10); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button { transition: none; }
+}
+
+.formField[data-gap="tight"] { gap: var(--space-4); }
+.formField[data-gap="regular"] { gap: var(--space-8); }
+.formField[data-gap="loose"] { gap: var(--space-12); }
+.formField[data-label-placement="inline"] {
+  align-items: baseline;
+  grid-template-columns: minmax(8rem, 1fr) 2fr;
+}
+.formFieldHeader p[data-hint-tone="strong"] { color: var(--color-text); font-weight: var(--font-weight-semibold); }

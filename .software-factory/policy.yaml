@@ -45,7 +45,7 @@ gates:
     activation: ["contracts/catalog/atomic-design.v1.json", "packages/design-system/tokens/**", "packages/design-system/src/**", "packages/ui-catalog/src/**", "apps/ai/src/itl_ai/memory/**", "apps/ai/src/itl_ai/refine/**", "apps/ai/src/itl_ai/main.py", "apps/web/src/app/**", "apps/web/src/features/canvas/**", "scripts/verify-atomic-*.mjs"]
     evidence: "evidence/gates/atomic-design-system.json"
     plan: "plans/06-atomic-composition-loop.md"
-    required_assertions: ["atomic.foundations_are_canonical_and_projected", "atomic.catalog_has_complete_hierarchy_and_safe_slots", "atomic.sessions_preserve_level_scope_and_context", "atomic.taste_brief_is_minimized_versioned_and_auditable", "atomic.templates_and_pages_render_only_registered_structures", "atomic.accessibility_and_responsive_states_hold_at_every_layer"]
+    required_assertions: ["atomic.foundations_are_canonical_and_projected", "atomic.catalog_slice_has_valid_hierarchy_and_safe_slots", "atomic.sessions_preserve_level_scope_context_and_outcome", "atomic.taste_brief_is_minimized_versioned_auditable_and_provider_bounded", "atomic.taste_loop_runs_on_more_than_one_editable_subject", "atomic.settings_page_uses_registered_compositions", "atomic.settings_slice_has_basic_responsive_and_keyboard_proof"]
 
 rules:
   # L2 — The guardrail's own configuration is hash-locked
