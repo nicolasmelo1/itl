@@ -105,6 +105,59 @@ def test_button_retrieval_reports_compatible_and_conflicting_relations(tmp_path:
     assert conflicting.preferenceRelation == "conflicting"
 
 
+def test_retrieval_projects_the_concrete_design_and_auditable_feedback(tmp_path: Path) -> None:
+    refine, _ = service(tmp_path)
+    request = PreferenceEventRequest(
+        sessionId="evaluation",
+        componentType="Button",
+        context=context("hero"),
+        targetElementId="continue-button",
+        action="candidate_acceptance",
+        source="candidate_acceptance",
+        beforeSpec=button_spec(),
+        afterSpec=button_spec(radius="pill"),
+        candidateId="exploit-1",
+        evidence=PreferenceEvidence(likedPaths=["/appearance/radius"], strength="strong"),
+        directives=[DecreaseDirective(kind="decrease", path="/appearance/radius")],
+        critique="Use a pill treatment in the hero.",
+    )
+    recorded = refine.record_preference_event(request)
+
+    retrieved = refine.preference_memory(context("hero"), PreferenceEvidence()).evidence[0]
+
+    assert retrieved.id == recorded.id
+    assert retrieved.outcome == "accepted"
+    assert retrieved.candidateId == "exploit-1"
+    assert retrieved.observedAppearance is not None
+    assert retrieved.observedAppearance.radius == "pill"
+    assert [(change.path, change.before, change.after) for change in retrieved.diff] == [
+        ("/elements/continue-button/props/appearance/radius", "soft", "pill")
+    ]
+    assert retrieved.directives == [DecreaseDirective(kind="decrease", path="/appearance/radius")]
+
+
+def test_retrieval_projects_almost_and_rejected_candidate_appearances(tmp_path: Path) -> None:
+    refine, _ = service(tmp_path)
+    for action, radius in (("almost", "square"), ("rejection", "pill")):
+        refine.record_preference_event(
+            PreferenceEventRequest(
+                sessionId="evaluation",
+                componentType="Button",
+                context=context("hero"),
+                targetElementId="continue-button",
+                action=action,
+                source="explicit_attribute_feedback" if action == "almost" else "absolute_feedback",
+                beforeSpec=button_spec(),
+                afterSpec=button_spec(radius=radius),
+                candidateId=f"{action}-1",
+            )
+        )
+
+    retrieved = refine.preference_memory(context("hero"), PreferenceEvidence()).evidence
+    outcomes = {item.outcome: item.observedAppearance.radius for item in retrieved if item.observedAppearance}
+    assert outcomes == {"almost": "square", "rejected": "pill"}
+
+
 def test_wild_policy_preserves_explicit_keeps(tmp_path: Path) -> None:
     refine, _ = service(tmp_path)
     request = Interpretation(

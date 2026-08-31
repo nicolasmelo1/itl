@@ -18,7 +18,11 @@ import {
   setButtonToken,
   updateInterpretation,
 } from "../refine/refine-engine";
-import { recordPreferenceEvent } from "../refine/memory-client";
+import {
+  type RetrievedObservation,
+  recordPreferenceEvent,
+  retrievePreferenceMemory,
+} from "../refine/memory-client";
 import { generateVariants as requestVariants, parseCritique } from "../refine/refine-client";
 
 import styles from "./controlled-canvas.module.css";
@@ -27,6 +31,10 @@ const contexts: Record<"toolbar" | "hero" | "form", DesignContext> = {
   toolbar: { role: "secondary-action", surface: "toolbar", density: "compact" },
   hero: { role: "primary-action", surface: "hero", density: "comfortable" },
   form: { role: "primary-action", surface: "form", density: "comfortable" },
+};
+type ConcreteObservation = RetrievedObservation & {
+  outcome: NonNullable<RetrievedObservation["outcome"]>;
+  observedAppearance: NonNullable<RetrievedObservation["observedAppearance"]>;
 };
 
 export function ControlledCanvas({ locale }: { locale: Locale }) {
@@ -42,6 +50,8 @@ export function ControlledCanvas({ locale }: { locale: Locale }) {
   const [isGeneratingVariants, setIsGeneratingVariants] = useState(false);
   const [status, setStatus] = useState(messages.selectButton);
   const [memoryEvents, setMemoryEvents] = useState(0);
+  const [round, setRound] = useState(1);
+  const [observations, setObservations] = useState<RetrievedObservation[]>([]);
   const context = contexts[surface];
 
   useEffect(() => markDevtoolsActive(), []);
@@ -138,13 +148,19 @@ export function ControlledCanvas({ locale }: { locale: Locale }) {
 
   function recordEvent(input: Omit<Parameters<typeof recordPreferenceEvent>[0], "context">) {
     void recordPreferenceEvent({ ...input, context }).then((recorded) => {
-      setMemoryEvents((count) => count + Number(recorded));
+      if (!recorded) return;
+      setMemoryEvents((count) => count + 1);
+      void retrievePreferenceMemory({
+        context,
+        evidence: input.evidence ?? input.interpretation?.evidence,
+      }).then(setObservations);
     });
   }
 
   function selectSurface(nextSurface: keyof typeof contexts) {
     setSurface(nextSurface);
     setVariants([]);
+    void retrievePreferenceMemory({ context: contexts[nextSurface] }).then(setObservations);
   }
 
   return (
@@ -255,6 +271,7 @@ export function ControlledCanvas({ locale }: { locale: Locale }) {
         <aside aria-label={messages.preferenceMemory(memoryEvents)} className={styles.notice}>
           {messages.preferenceMemory(memoryEvents)}
         </aside>
+        <LearningLoopDebugger messages={messages} observations={observations} round={round} />
 
         {interpretation ? (
           <>
@@ -307,19 +324,26 @@ export function ControlledCanvas({ locale }: { locale: Locale }) {
                     });
                     setCurrentSpec(variant.spec);
                     setVariants([]);
+                    setInterpretation(null);
+                    setCritique("");
+                    setRound((currentRound) => currentRound + 1);
                     setStatus(messages.accepted(variant.kind));
                   }}
-                  onEvidence={(label) => {
+                  onEvidence={(outcome) => {
                     recordEvent({
-                      action: label === messages.indifferent ? "indifference" : "explicit_attribute_feedback",
-                      source: label === messages.indifferent ? "absolute_feedback" : "explicit_attribute_feedback",
+                      action: outcome === "indifferent" ? "indifference" : "almost",
+                      source: outcome === "indifferent" ? "absolute_feedback" : "explicit_attribute_feedback",
                       beforeSpec: currentSpec,
+                      afterSpec: variant.spec,
                       targetElementId: selectedElementId,
                       selectedElementId,
                       candidateId: variant.id,
                       interpretation,
                     });
-                    setStatus(messages.evidenceStored(label, variant.kind));
+                    setStatus(messages.evidenceStored(
+                      outcome === "indifferent" ? messages.indifferent : messages.almost,
+                      variant.kind,
+                    ));
                   }}
                 />
               ))}
@@ -327,12 +351,17 @@ export function ControlledCanvas({ locale }: { locale: Locale }) {
             <button
               className={styles.rejectAll}
               onClick={() => {
-                recordEvent({
-                  action: "rejection",
-                  source: "absolute_feedback",
-                  beforeSpec: currentSpec,
-                  targetElementId: selectedElementId,
-                  interpretation,
+                variants.forEach((variant) => {
+                  recordEvent({
+                    action: "rejection",
+                    source: "absolute_feedback",
+                    beforeSpec: currentSpec,
+                    afterSpec: variant.spec,
+                    targetElementId: selectedElementId,
+                    selectedElementId,
+                    candidateId: variant.id,
+                    interpretation,
+                  });
                 });
                 setVariants([]);
                 setStatus(messages.rejected);
@@ -425,13 +454,41 @@ function reviewableInterpretation(interpretation: Interpretation): Interpretatio
   return updateInterpretation(interpretation, `/appearance/${firstPath}`, keptPaths.has(`/appearance/${firstPath}`));
 }
 
+function LearningLoopDebugger({ messages, observations, round }: {
+  messages: Messages;
+  observations: RetrievedObservation[];
+  round: number;
+}) {
+  const concreteObservations = observations.filter(
+    (observation): observation is ConcreteObservation =>
+      observation.outcome !== null && observation.observedAppearance !== null,
+  );
+  return (
+    <aside aria-label={messages.learningLoop} className={styles.learningLoop}>
+      <strong>{messages.round(round)}</strong>
+      <p>{messages.usingObservations(concreteObservations.length)}</p>
+      <ul>
+        {concreteObservations.map((observation) => (
+          <li key={observation.id}>
+            <span>{messages.observationOutcome(observation.outcome)}</span>
+            <span>
+              {observation.context?.surface ?? messages.unknownContext} — {observation.observedAppearance.recipe}
+              {" / "}{observation.observedAppearance.radius}{" / "}{observation.observedAppearance.density}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </aside>
+  );
+}
+
 function VariantCard({ baseline, messages, surface, variant, onAccept, onEvidence }: {
   baseline: typeof buttonFixtureSpec;
   messages: Messages;
   surface: keyof typeof contexts;
   variant: RefineVariant;
   onAccept: () => void;
-  onEvidence: (evidence: string) => void;
+  onEvidence: (outcome: "almost" | "indifferent") => void;
 }) {
   const changes = variantChanges(baseline, variant.spec);
   return (
@@ -448,8 +505,8 @@ function VariantCard({ baseline, messages, surface, variant, onAccept, onEvidenc
       </div>
       <div className={styles.variantActions}>
         <button onClick={onAccept} type="button">{messages.accept}</button>
-        <button onClick={() => onEvidence(messages.almost)} type="button">{messages.almost}</button>
-        <button onClick={() => onEvidence(messages.indifferent)} type="button">{messages.indifferent}</button>
+        <button onClick={() => onEvidence("almost")} type="button">{messages.almost}</button>
+        <button onClick={() => onEvidence("indifferent")} type="button">{messages.indifferent}</button>
       </div>
     </article>
   );

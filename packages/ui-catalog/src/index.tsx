@@ -1,7 +1,16 @@
 import { defineCatalog, validateSpec } from "@json-render/core";
 import { defineRegistry, JSONUIProvider, Renderer } from "@json-render/react";
 import { schema as reactSchema } from "@json-render/react/schema";
-import { Badge, Button, Card, Input } from "@itl/design-system";
+import {
+  Badge,
+  Button,
+  Card,
+  FormField,
+  Input,
+  ProjectSettingsPage,
+  SettingsForm,
+  SettingsTemplate,
+} from "@itl/design-system";
 import { z } from "zod";
 
 export const UI_SPEC_VERSION = "itl.ui/v1";
@@ -70,6 +79,19 @@ const cardPropsSchema = z
   })
   .strict();
 
+const formFieldPropsSchema = z.object({
+  label: z.string().min(1),
+  hint: z.string().min(1).optional(),
+}).strict();
+
+const settingsFormPropsSchema = z.object({
+  title: z.string().min(1),
+  description: z.string(),
+}).strict();
+
+const settingsTemplatePropsSchema = z.object({ title: z.string().min(1) }).strict();
+const projectSettingsPagePropsSchema = z.object({ title: z.string().min(1) }).strict();
+
 const elementIdSchema = z.string().regex(/^[a-z][a-z0-9-]*$/, "Element IDs must be stable kebab-case strings.");
 
 const elementSchema = z.discriminatedUnion("type", [
@@ -77,6 +99,10 @@ const elementSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("Input"), props: inputPropsSchema, children: z.array(elementIdSchema).default([]) }).strict(),
   z.object({ type: z.literal("Badge"), props: badgePropsSchema, children: z.array(elementIdSchema).default([]) }).strict(),
   z.object({ type: z.literal("Card"), props: cardPropsSchema, children: z.array(elementIdSchema).default([]) }).strict(),
+  z.object({ type: z.literal("FormField"), props: formFieldPropsSchema, children: z.array(elementIdSchema).default([]) }).strict(),
+  z.object({ type: z.literal("SettingsForm"), props: settingsFormPropsSchema, children: z.array(elementIdSchema).default([]) }).strict(),
+  z.object({ type: z.literal("SettingsTemplate"), props: settingsTemplatePropsSchema, children: z.array(elementIdSchema).default([]) }).strict(),
+  z.object({ type: z.literal("ProjectSettingsPage"), props: projectSettingsPagePropsSchema, children: z.array(elementIdSchema).default([]) }).strict(),
 ]);
 
 export const uiSpecSchema = z
@@ -91,8 +117,120 @@ export type UISpec = z.infer<typeof uiSpecSchema>;
 export type UIElement = UISpec["elements"][string];
 export type ComponentType = UIElement["type"];
 
+/**
+ * Foundations are design decisions rather than renderable components. The
+ * remaining names are the five Atomic Design levels. Keeping the full
+ * vocabulary in the catalog makes it available to session and prompt tooling
+ * before every future component is implemented.
+ */
+export const atomicDesignLevels = [
+  "foundation",
+  "atom",
+  "molecule",
+  "organism",
+  "template",
+  "page",
+] as const;
+
+export type AtomicDesignLevel = (typeof atomicDesignLevels)[number];
+type RenderableAtomicDesignLevel = Exclude<AtomicDesignLevel, "foundation">;
+
+/**
+ * The legal render-tree edges for Atomic Design. A foundation is a token/value
+ * source and is therefore deliberately absent: it informs every node but is
+ * never itself a DOM/render-spec node.
+ */
+export const atomicChildLevels: Record<RenderableAtomicDesignLevel, readonly RenderableAtomicDesignLevel[]> = {
+  atom: [],
+  molecule: ["atom"],
+  organism: ["atom", "molecule"],
+  template: ["molecule", "organism"],
+  page: ["template"],
+};
+
+const atomicNodeIdSchema = z.string().regex(/^[a-z][a-z0-9-]*$/, "Atomic node IDs must be stable kebab-case strings.");
+const atomicNodeSchema = z.object({
+  level: z.enum(["atom", "molecule", "organism", "template", "page"]),
+  children: z.array(atomicNodeIdSchema).default([]),
+}).strict();
+const atomicCompositionSchema = z.object({
+  root: atomicNodeIdSchema,
+  nodes: z.record(atomicNodeIdSchema, atomicNodeSchema),
+}).strict();
+
+export type AtomicComposition = z.infer<typeof atomicCompositionSchema>;
+export type AtomicCompositionIssue = {
+  code: "shape" | "reference" | "cycle" | "level" | "root";
+  message: string;
+  path?: string;
+};
+export type AtomicCompositionValidation =
+  | { valid: true; composition: AtomicComposition }
+  | { valid: false; issues: AtomicCompositionIssue[] };
+
+/**
+ * Validate the layer graph before a component registry ever attempts to render
+ * it. This is intentionally generic: concrete component/slot validation is
+ * performed by the UI catalog metadata below.
+ */
+export function validateAtomicComposition(input: unknown): AtomicCompositionValidation {
+  const shape = atomicCompositionSchema.safeParse(input);
+  if (!shape.success) {
+    return {
+      valid: false,
+      issues: shape.error.issues.map((issue) => ({ code: "shape", message: issue.message, path: `/${issue.path.join("/")}` })),
+    };
+  }
+
+  const composition = shape.data;
+  const rootNode = composition.nodes[composition.root];
+  if (!rootNode || rootNode.level !== "page") {
+    return {
+      valid: false,
+      issues: [{ code: "root", message: "An Atomic Design composition must have a registered page root.", path: "/root" }],
+    };
+  }
+
+  const issues: AtomicCompositionIssue[] = [];
+  const visiting = new Set<string>();
+  const visited = new Set<string>();
+  function visit(nodeId: string) {
+    if (visiting.has(nodeId)) {
+      issues.push({ code: "cycle", message: `Cycle detected at atomic node '${nodeId}'.`, path: `/nodes/${nodeId}` });
+      return;
+    }
+    if (visited.has(nodeId)) return;
+    const node = composition.nodes[nodeId];
+    if (!node) {
+      issues.push({ code: "reference", message: `Atomic node '${nodeId}' does not exist.`, path: `/nodes/${nodeId}` });
+      return;
+    }
+
+    visiting.add(nodeId);
+    for (const childId of node.children) {
+      const child = composition.nodes[childId];
+      if (!child) {
+        issues.push({ code: "reference", message: `Atomic node '${nodeId}' references missing child '${childId}'.`, path: `/nodes/${nodeId}/children` });
+        continue;
+      }
+      if (!atomicChildLevels[node.level].includes(child.level)) {
+        issues.push({
+          code: "level",
+          message: `${node.level} cannot compose ${child.level}.`,
+          path: `/nodes/${nodeId}/children`,
+        });
+      }
+      visit(childId);
+    }
+    visiting.delete(nodeId);
+    visited.add(nodeId);
+  }
+  visit(composition.root);
+  return issues.length ? { valid: false, issues } : { valid: true, composition };
+}
+
 type CatalogMetadata = {
-  level: "atom";
+  level: RenderableAtomicDesignLevel;
   editablePropPaths: readonly string[];
   allowedChildTypes: readonly ComponentType[];
 };
@@ -114,9 +252,29 @@ export const componentMetadata: Record<ComponentType, CatalogMetadata> = {
     allowedChildTypes: [],
   },
   Card: {
-    level: "atom",
+    level: "molecule",
     editablePropPaths: ["/title", "/description", "/emphasis"],
-    allowedChildTypes: ["Button", "Input", "Badge", "Card"],
+    allowedChildTypes: ["Button", "Input", "Badge"],
+  },
+  FormField: {
+    level: "molecule",
+    editablePropPaths: ["/label", "/hint"],
+    allowedChildTypes: ["Input"],
+  },
+  SettingsForm: {
+    level: "organism",
+    editablePropPaths: ["/title", "/description"],
+    allowedChildTypes: ["FormField", "Button", "Badge"],
+  },
+  SettingsTemplate: {
+    level: "template",
+    editablePropPaths: ["/title"],
+    allowedChildTypes: ["SettingsForm"],
+  },
+  ProjectSettingsPage: {
+    level: "page",
+    editablePropPaths: ["/title"],
+    allowedChildTypes: ["SettingsTemplate"],
   },
 };
 
@@ -125,7 +283,11 @@ export const jsonRenderCatalog = defineCatalog(reactSchema, {
     Button: { props: buttonPropsSchema, description: "A controlled native button. It never accepts actions, styles, or URLs." },
     Input: { props: inputPropsSchema, description: "A controlled native text input." },
     Badge: { props: badgePropsSchema, description: "A controlled status badge." },
-    Card: { props: cardPropsSchema, description: "An atom-level card that may host registered child element IDs." },
+    Card: { props: cardPropsSchema, description: "A molecule that composes registered atom element IDs into a bounded surface." },
+    FormField: { props: formFieldPropsSchema, description: "A molecule that owns a field label, help text and one registered Input atom." },
+    SettingsForm: { props: settingsFormPropsSchema, description: "An organism for a bounded settings task." },
+    SettingsTemplate: { props: settingsTemplatePropsSchema, description: "A template with a named settings layout region." },
+    ProjectSettingsPage: { props: projectSettingsPagePropsSchema, description: "A concrete page that renders a reviewed settings template." },
   },
   actions: {},
 });
@@ -136,6 +298,10 @@ const { registry } = defineRegistry(jsonRenderCatalog, {
     Input: ({ props }) => <Input {...props} />,
     Badge: ({ props }) => <Badge {...props} />,
     Card: ({ props, children }) => <Card {...props}>{children}</Card>,
+    FormField: ({ props, children }) => <FormField {...props}>{children}</FormField>,
+    SettingsForm: ({ props, children }) => <SettingsForm {...props}>{children}</SettingsForm>,
+    SettingsTemplate: ({ props, children }) => <SettingsTemplate {...props}>{children}</SettingsTemplate>,
+    ProjectSettingsPage: ({ props, children }) => <ProjectSettingsPage {...props}>{children}</ProjectSettingsPage>,
   },
 });
 
@@ -250,4 +416,45 @@ export const buttonFixtureSpec: UISpec = {
   version: UI_SPEC_VERSION,
   root: "continue-button",
   elements: { "continue-button": fixtureSpec.elements["continue-button"] },
+};
+
+export const projectSettingsFixtureSpec: UISpec = {
+  version: UI_SPEC_VERSION,
+  root: "project-settings-page",
+  elements: {
+    "project-settings-page": {
+      type: "ProjectSettingsPage",
+      props: { title: "Project settings" },
+      children: ["settings-template"],
+    },
+    "settings-template": {
+      type: "SettingsTemplate",
+      props: { title: "Project settings" },
+      children: ["account-settings"],
+    },
+    "account-settings": {
+      type: "SettingsForm",
+      props: { title: "Account", description: "Choose where project updates are sent." },
+      children: ["email-field", "save-settings"],
+    },
+    "email-field": {
+      type: "FormField",
+      props: { label: "Account email", hint: "We use this address for essential project notifications." },
+      children: ["account-email"],
+    },
+    "account-email": {
+      type: "Input",
+      props: { label: "Email address", placeholder: "you@example.com", value: "", tone: "quiet", state: "default" },
+      children: [],
+    },
+    "save-settings": {
+      type: "Button",
+      props: {
+        content: { label: "Save changes" },
+        semantic: { role: "primary-action", state: "default" },
+        appearance: { recipe: "primary", size: "regular", radius: "soft", density: "comfortable", fontWeight: "semibold" },
+      },
+      children: [],
+    },
+  },
 };

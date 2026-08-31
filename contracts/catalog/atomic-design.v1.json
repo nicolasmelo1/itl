@@ -1,0 +1,56 @@
+{
+  "version": "itl.catalog/atomic-design.v1",
+  "method": "atomic-design",
+  "layers": [
+    {
+      "id": "foundation",
+      "kind": "design-decisions",
+      "description": "Non-renderable primitive and semantic tokens, accessibility and content rules.",
+      "inventory": ["color", "typography", "spacing", "sizing", "border", "radius", "elevation", "motion", "breakpoint", "grid", "iconography", "focus", "z-index"]
+    },
+    {
+      "id": "atom",
+      "kind": "renderable-component",
+      "description": "A single-purpose, independently accessible building block.",
+      "inventory": ["Text", "Heading", "Label", "HelpText", "Icon", "Avatar", "Image", "Link", "Button", "Badge", "Divider", "Spinner", "Skeleton", "TextInput", "Textarea", "Select", "Checkbox", "Radio", "Switch"]
+    },
+    {
+      "id": "molecule",
+      "kind": "bounded-composition",
+      "description": "A stable, small composition with one clear responsibility.",
+      "inventory": ["Field", "SearchField", "InputGroup", "ButtonGroup", "FormActions", "MenuItem", "NavItem", "Breadcrumbs", "Pagination", "Alert", "Card", "EmptyState"]
+    },
+    {
+      "id": "organism",
+      "kind": "interface-section",
+      "description": "A distinct, purposeful section assembled from atoms and molecules.",
+      "inventory": ["AppHeader", "PrimaryNavigation", "Sidebar", "Hero", "AuthenticationForm", "FilterPanel", "DataTable", "ToastRegion", "Dialog", "Footer", "ContentFeed"]
+    },
+    {
+      "id": "template",
+      "kind": "layout-and-slots",
+      "description": "A responsive page-level layout with named regions and representative content.",
+      "inventory": ["AppShell", "MarketingLanding", "Authentication", "Settings", "Dashboard", "ContentDetail", "Checkout"]
+    },
+    {
+      "id": "page",
+      "kind": "concrete-instance",
+      "description": "A real route, data and content instance of a reviewed template.",
+      "inventory": ["HomePage", "ProjectSettingsPage", "SignInPage", "BillingPage", "ArticlePage", "CheckoutPage"]
+    }
+  ],
+  "compositionRules": {
+    "foundation": ["atom", "molecule", "organism", "template", "page"],
+    "atom": ["molecule", "organism", "template", "page"],
+    "molecule": ["organism", "template", "page"],
+    "organism": ["template", "page"],
+    "template": ["page"],
+    "page": []
+  },
+  "guardrails": [
+    "A layer may use only registered lower-level components and documented slots.",
+    "Accessibility, semantic content and responsive behaviour are hard constraints at every layer.",
+    "The AI may select catalog values and composition patterns, never arbitrary HTML, CSS, JavaScript, URLs or component types.",
+    "Atomic Design is a classification and composition model, not a mandatory linear delivery sequence."
+  ]
+}

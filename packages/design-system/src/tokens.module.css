@@ -1,4 +1,39 @@
 :global(:root) {
+  /* Generated projection of ../tokens/itl.tokens.json. Do not edit values here. */
+  --font-family-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-md: 1rem;
+  --font-size-lg: 1.05rem;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 650;
+  --line-height-tight: 1;
+  --line-height-normal: 1.5;
+
+  --space-1: 0.25rem;
+  --space-2: 0.35rem;
+  --space-3: 0.45rem;
+  --space-4: 0.5rem;
+  --space-5: 0.55rem;
+  --space-6: 0.6rem;
+  --space-7: 0.65rem;
+  --space-8: 0.75rem;
+  --space-9: 0.875rem;
+  --space-10: 0.9rem;
+  --space-12: 1rem;
+  --space-14: 1.25rem;
+
+  --border-width-default: 1px;
+  --radius-none: 0;
+  --radius-sm: 0.4rem;
+  --radius-md: 0.6rem;
+  --radius-full: 999px;
+  --shadow-raised: 0 12px 30px rgb(22 29 41 / 12%);
+  --motion-fast: 150ms;
+  --size-control-compact: 2rem;
+  --size-control-regular: 2.5rem;
+  --focus-ring-width: 3px;
+
   --color-accent: #4f46e5;
   --color-accent-strong: #3730a3;
   --color-accent-muted: #e0e7ff;

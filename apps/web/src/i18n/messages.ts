@@ -49,6 +49,11 @@ export type Messages = {
   almost: string;
   indifferent: string;
   rejectAll: string;
+  learningLoop: string;
+  round: (round: number) => string;
+  usingObservations: (count: number) => string;
+  observationOutcome: (outcome: "accepted" | "almost" | "rejected" | "indifferent" | "manual_edit") => string;
+  unknownContext: string;
   preferenceMemory: (count: number) => string;
   emptyCritique: string;
   parsed: string;
@@ -103,6 +108,11 @@ export const messages: Record<Locale, Messages> = {
     almost: "Almost",
     indifferent: "Indifferent",
     rejectAll: "Reject all",
+    learningLoop: "Learning loop debugger",
+    round: (round) => `Round ${round}`,
+    usingObservations: (count) => `Using ${count} previous observation${count === 1 ? "" : "s"}:`,
+    observationOutcome: (outcome) => ({ accepted: "✓ accepted", almost: "~ almost", rejected: "✕ rejected", indifferent: "– indifferent", manual_edit: "✎ edited" })[outcome],
+    unknownContext: "unknown context",
     preferenceMemory: (count) => `Preference memory: ${count} explicit action${count === 1 ? "" : "s"} stored locally when the API is running.`,
     emptyCritique: "Describe a visual preference before reviewing its interpretation.",
     parsed: "Review the visual directives. Nothing has been stored yet.",
@@ -155,6 +165,11 @@ export const messages: Record<Locale, Messages> = {
     almost: "Quase",
     indifferent: "Indiferente",
     rejectAll: "Rejeitar todas",
+    learningLoop: "Depurador do ciclo de aprendizado",
+    round: (round) => `Rodada ${round}`,
+    usingObservations: (count) => `Usando ${count} observaç${count === 1 ? "ão anterior" : "ões anteriores"}:`,
+    observationOutcome: (outcome) => ({ accepted: "✓ aceito", almost: "~ quase", rejected: "✕ rejeitado", indifferent: "– indiferente", manual_edit: "✎ editado" })[outcome],
+    unknownContext: "contexto desconhecido",
     preferenceMemory: (count) => `Memória de preferências: ${count} ${count === 1 ? "ação explícita" : "ações explícitas"} salva${count === 1 ? "" : "s"} localmente quando a API está em execução.`,
     emptyCritique: "Descreva uma preferência visual antes de revisar a interpretação.",
     parsed: "Revise as diretrizes visuais. Nada foi salvo ainda.",

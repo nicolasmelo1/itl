@@ -34,6 +34,24 @@ export type CardProps = {
   emphasis: "quiet" | "raised";
 };
 
+export type FormFieldProps = {
+  label: string;
+  hint?: string;
+};
+
+export type SettingsFormProps = {
+  title: string;
+  description: string;
+};
+
+export type SettingsTemplateProps = {
+  title: string;
+};
+
+export type ProjectSettingsPageProps = {
+  title: string;
+};
+
 export function Button(props: ButtonProps) {
   const isLoading = props.semantic.state === "loading";
   const isDisabled = props.semantic.state !== "default";
@@ -89,4 +107,41 @@ export function Card({ children, ...props }: CardProps & { children?: ReactNode 
       {children}
     </section>
   );
+}
+
+export function FormField({ children, hint, label }: FormFieldProps & { children?: ReactNode }) {
+  return (
+    <section aria-label={label} className={styles.formField}>
+      <div className={styles.formFieldHeader}>
+        <strong>{label}</strong>
+        {hint ? <p>{hint}</p> : null}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+export function SettingsForm({ children, ...props }: SettingsFormProps & { children?: ReactNode }) {
+  return (
+    <section aria-label={props.title} className={styles.settingsForm}>
+      <header className={styles.settingsFormHeader}>
+        <h2>{props.title}</h2>
+        <p>{props.description}</p>
+      </header>
+      {children}
+    </section>
+  );
+}
+
+export function SettingsTemplate({ children, title }: SettingsTemplateProps & { children?: ReactNode }) {
+  return (
+    <div className={styles.settingsTemplate}>
+      <header><h1>{title}</h1></header>
+      {children}
+    </div>
+  );
+}
+
+export function ProjectSettingsPage({ children, title }: ProjectSettingsPageProps & { children?: ReactNode }) {
+  return <main aria-label={title} className={styles.projectSettingsPage}>{children}</main>;
 }

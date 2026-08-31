@@ -169,7 +169,7 @@ def record_preference_event(request: PreferenceEventRequest) -> PreferenceEventR
 @app.post("/v1/preference-memory", response_model=MemoryResponse)
 def preference_memory(query: MemoryQuery) -> MemoryResponse:
     """Return bounded, contextual evidence for the Button generator and memory UI."""
-    return refine_service.preference_memory(query.context, query.evidence)
+    return refine_service.preference_memory(query.context, query.evidence, query.scope)
 
 
 def run() -> None:

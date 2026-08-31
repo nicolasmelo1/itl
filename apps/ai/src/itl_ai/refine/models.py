@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 UI_SPEC_VERSION = "itl.ui/v1"
 VisualPath = Literal[
@@ -78,6 +78,20 @@ class DesignContext(StrictModel):
     role: Literal["primary-action", "secondary-action"]
     surface: Literal["toolbar", "hero", "form", "dashboard"]
     density: Literal["compact", "comfortable"]
+
+
+AtomicDesignLevel = Literal["foundation", "atom", "molecule", "organism", "template", "page"]
+
+
+class AtomicScope(StrictModel):
+    """The exact Atomic Design subject a session is allowed to learn from."""
+
+    level: AtomicDesignLevel
+    id: str = Field(pattern=r"^[a-z][a-z0-9-]*$")
+    semanticRole: str | None = Field(default=None, min_length=1, max_length=120)
+
+
+DEFAULT_BUTTON_SCOPE = AtomicScope(level="atom", id="button", semanticRole="primary-action")
 
 
 class PreferenceEvidence(StrictModel):
@@ -223,6 +237,7 @@ class PreferenceEventRequest(StrictModel):
 
     sessionId: str = Field(default="local", pattern=r"^[a-zA-Z0-9_-]{1,80}$")
     componentType: Literal["Button"] = "Button"
+    scope: AtomicScope = Field(default_factory=lambda: DEFAULT_BUTTON_SCOPE.model_copy(deep=True))
     context: DesignContext
     targetElementId: str = Field(pattern=r"^[a-z][a-z0-9-]*$")
     action: Literal[
@@ -232,6 +247,7 @@ class PreferenceEventRequest(StrictModel):
         "absolute_feedback",
         "pairwise_choice",
         "candidate_acceptance",
+        "almost",
         "rejection",
         "indifference",
         "explore_more",
@@ -254,6 +270,12 @@ class PreferenceEventRequest(StrictModel):
     critique: str | None = Field(default=None, max_length=4_000)
     parserInterpretation: Interpretation | None = None
 
+    @model_validator(mode="after")
+    def scope_matches_the_current_component_catalog(self) -> "PreferenceEventRequest":
+        if self.componentType == "Button" and self.scope.level != "atom":
+            raise ValueError("Button preference events must use an atom-level scope.")
+        return self
+
 
 class PreferenceEventResponse(StrictModel):
     id: int
@@ -265,14 +287,45 @@ class RetrievedEvidence(StrictModel):
     contextRelation: Literal["exact", "compatible", "global", "mismatch"]
     preferenceRelation: Literal["supporting", "conflicting", "unknown"]
     source: str
+    scope: AtomicScope | None = None
     context: DesignContext | None = None
     evidence: PreferenceEvidence
     critique: str | None = None
+    # This is a retrieval projection, not a second memory store.  It makes the
+    # concrete design that received feedback available to the next generation.
+    outcome: Literal["accepted", "almost", "rejected", "indifferent", "manual_edit"] | None = None
+    observedAppearance: ButtonAppearance | None = None
+    diff: list[SpecDiff] = []
+    candidateId: str | None = None
+    directives: list[AttributeDirective] = []
+    parserInterpretation: Interpretation | None = None
+
+
+class TasteBriefDecision(StrictModel):
+    """The minimum auditable evidence slice that may enter a generation prompt."""
+
+    eventId: int
+    scope: AtomicScope | None = None
+    contextRelation: Literal["exact", "compatible", "global", "mismatch"]
+    preferenceRelation: Literal["supporting", "conflicting", "unknown"]
+    source: str
+    strength: Literal["weak", "moderate", "strong"]
+    evidence: PreferenceEvidence
+    directives: list[AttributeDirective] = []
+
+
+class TasteBrief(StrictModel):
+    version: Literal["itl.taste-brief/v1"] = "itl.taste-brief/v1"
+    scope: AtomicScope
+    context: DesignContext
+    evidenceIds: list[int]
+    decisions: list[TasteBriefDecision]
 
 
 class MemoryQuery(StrictModel):
     context: DesignContext
     evidence: PreferenceEvidence = PreferenceEvidence()
+    scope: AtomicScope = Field(default_factory=lambda: DEFAULT_BUTTON_SCOPE.model_copy(deep=True))
 
 
 class MemoryResponse(StrictModel):

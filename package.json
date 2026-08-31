@@ -16,6 +16,8 @@
     "verify:project-setup": "node scripts/verify-project-setup.mjs",
     "verify:controlled-ui-language": "node scripts/verify-controlled-ui-language.mjs",
     "verify:memory-exploration-validation": "node scripts/verify-memory-exploration-validation.mjs",
-    "verify:button-contextual-lab": "node scripts/verify-button-contextual-lab.mjs"
+    "verify:button-contextual-lab": "node scripts/verify-button-contextual-lab.mjs",
+    "verify:atomic-foundations": "node scripts/verify-atomic-foundations.mjs",
+    "verify:atomic-design-system": "node scripts/verify-atomic-design-system.mjs"
   }
 }
