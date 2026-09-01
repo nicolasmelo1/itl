@@ -80,6 +80,7 @@ def test_atomic_sessions_preserve_level_scope_context_and_outcome(tmp_path: Path
 def test_button_events_cannot_be_recorded_under_a_non_atom_scope() -> None:
     with pytest.raises(ValidationError, match="atom-level scope"):
         PreferenceEventRequest(
+            sessionId="atomic-session-1",
             componentType="Button",
             scope=AtomicScope(level="organism", id="hero-section"),
             context=context(),
@@ -134,6 +135,7 @@ def test_generation_requests_keep_their_explicit_scope_for_retrieval_and_audit(t
     scope = AtomicScope(level="atom", id="settings-save-button", semanticRole="primary-action")
     refine.record_preference_event(
         PreferenceEventRequest(
+            sessionId="atomic-session-1",
             componentType="Button",
             scope=scope,
             context=context(),
@@ -145,9 +147,10 @@ def test_generation_requests_keep_their_explicit_scope_for_retrieval_and_audit(t
         )
     )
 
-    generated = refine.generate_spec(GenerateSpecRequest(context=context(), scope=scope))
+    generated = refine.generate_spec(GenerateSpecRequest(sessionId="atomic-session-1", context=context(), scope=scope))
     variants = refine.generate_variants(
         GenerateVariantsRequest(
+            sessionId="atomic-session-1",
             specVersion="itl.ui/v1",
             spec=button_spec(),
             targetElementId="continue-button",

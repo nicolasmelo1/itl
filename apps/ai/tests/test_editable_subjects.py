@@ -122,6 +122,7 @@ def test_a_molecule_completes_the_same_critique_variant_and_outcome_loop(tmp_pat
 
     variants = refine.generate_variants(
         GenerateVariantsRequest(
+            sessionId="subjects-session-1",
             specVersion="itl.ui/v1",
             spec=field_spec(),
             targetElementId="email-field",
@@ -137,6 +138,7 @@ def test_a_molecule_completes_the_same_critique_variant_and_outcome_loop(tmp_pat
 
     refine.record_preference_event(
         PreferenceEventRequest(
+            sessionId="subjects-session-1",
             componentType="FormField",
             scope=FIELD_SCOPE,
             context=context(),
@@ -161,6 +163,7 @@ def test_a_molecule_completes_the_same_critique_variant_and_outcome_loop(tmp_pat
 def test_a_subject_cannot_be_refined_under_another_levels_scope(tmp_path: Path) -> None:
     refine, _ = service(tmp_path)
     request = GenerateVariantsRequest(
+        sessionId="subjects-session-1",
         specVersion="itl.ui/v1",
         spec=field_spec(),
         targetElementId="email-field",
@@ -182,6 +185,7 @@ def test_a_subject_cannot_be_refined_under_another_levels_scope(tmp_path: Path) 
 def test_a_subject_cannot_borrow_another_subjects_vocabulary(tmp_path: Path) -> None:
     refine, _ = service(tmp_path)
     request = GenerateVariantsRequest(
+        sessionId="subjects-session-1",
         specVersion="itl.ui/v1",
         spec=field_spec(),
         targetElementId="email-field",
@@ -204,6 +208,7 @@ def test_atom_and_molecule_evidence_never_enter_each_others_retrieval(tmp_path: 
     refine, _ = service(tmp_path)
     button_event = refine.record_preference_event(
         PreferenceEventRequest(
+            sessionId="subjects-session-1",
             componentType="Button",
             scope=BUTTON_SCOPE,
             context=context(),
@@ -216,6 +221,7 @@ def test_atom_and_molecule_evidence_never_enter_each_others_retrieval(tmp_path: 
     )
     field_event = refine.record_preference_event(
         PreferenceEventRequest(
+            sessionId="subjects-session-1",
             componentType="FormField",
             scope=FIELD_SCOPE,
             context=context(),

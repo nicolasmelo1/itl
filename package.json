@@ -18,6 +18,7 @@
     "verify:memory-exploration-validation": "node scripts/verify-memory-exploration-validation.mjs",
     "verify:button-contextual-lab": "node scripts/verify-button-contextual-lab.mjs",
     "verify:atomic-foundations": "node scripts/verify-atomic-foundations.mjs",
-    "verify:atomic-design-system": "node scripts/verify-atomic-design-system.mjs"
+    "verify:atomic-design-system": "node scripts/verify-atomic-design-system.mjs",
+    "verify:multi-component-taste": "node scripts/verify-multi-component-taste.mjs"
   }
 }

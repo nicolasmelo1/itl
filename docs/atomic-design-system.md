@@ -136,11 +136,45 @@ The learning unit is a **decision**, not a screenshot and not a universal
 
 ```text
 subject (token | component | composition | template | page)
-+ Atomic Design level + semantic role + context
++ Atomic Design level + semantic role + usage context + project context
 + before/after validated spec + explicit feedback/directives
 + source/confidence + supporting or conflicting event IDs
 + accessibility/responsive validation results
 ```
+
+### Two context axes
+
+Where a stimulus sits on a screen and what the product is trying to be are
+independent questions. `UsageContext` holds surface, semantic role, density and
+state; `ProjectContext` holds product kind, visual tone, audience, platform and
+brand profile, and belongs to the project or session rather than to the
+artifact. Retrieval compares each axis separately, so round buttons in a
+playful product and square ones in a serious one are the *same usage under two
+product tones* — a compatible relation — instead of one person contradicting
+themselves. A judgment that names no project context is read as unspecified and
+ranks below one that does; it is never rewritten.
+
+### Shared taste dimensions
+
+A component does not own a private vocabulary. Taste lives in one finite,
+versioned space — `shape`, `density`, `emphasis`, `typography`, `surface`,
+`motion`, `composition` — declared in
+[the dimension contract](../contracts/catalog/taste-dimensions.v1.json). Each
+component publishes a **capability manifest**: which dimensions it exposes,
+which of its own props expose them, and where each finite value lands on the
+shared 0–1 scale. `Button.radius=square` and `Card.radius=none` are different
+tokens and the same point on `shape.radius`.
+
+One judgment therefore teaches at two altitudes: the shared dimensions the
+stimulus expressed, and a **component residual** — the distance between that
+component's own reading and the shared one. A residual is a taste statement in
+its own right ("angular everywhere, but pill is fine on chips"), not an error
+term. Contradiction is likewise an output: a dimension with conflicting
+evidence is reported as conflicting rather than averaged into agreement.
+
+The normalized coordinate stays internal. A model still proposes catalog values
+and the engine still validates them; the shared scale never becomes a free
+parameter a provider may emit.
 
 Evidence moves upward only by an explicit, inspectable rule:
 
@@ -148,6 +182,7 @@ Evidence moves upward only by an explicit, inspectable rule:
 | --- | --- | --- |
 | Foundation token in a compatible theme/context | all layers using that token | a mandate for unrelated themes or semantic roles |
 | Atom decision | that atom and mapped roles | a global rule for every control |
+| Any decision, at dimension altitude | any component declaring the same dimension | a reading on a dimension that component does not declare |
 | Molecule/organism composition decision | the same composition in compatible context | a mutation of its atoms' defaults |
 | Template decision | pages using that template | a universal page layout |
 | Page outcome | the same task/content context | a template rule without review |

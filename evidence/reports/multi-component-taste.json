@@ -1,0 +1,28 @@
+{
+  "scenario": "multi-component-taste",
+  "status": "passed",
+  "goal": "A person judging a button and a field in one sitting builds a single corpus of identified sessions, and a preference they express on the button is readable on the field wherever the two share a taste dimension — while the same usage judged under a second product tone reads as a different situation rather than as the person contradicting themselves.",
+  "catalog": "contracts/catalog/taste-dimensions.v1.json",
+  "assertions": [
+    {
+      "type": "taste.corpus_resolves_to_one_path_with_real_session_ids",
+      "status": "passed"
+    },
+    {
+      "type": "taste.dimensions_are_shared_and_component_declared",
+      "status": "passed"
+    },
+    {
+      "type": "taste.shared_dimension_evidence_transfers_without_leaking",
+      "status": "passed"
+    },
+    {
+      "type": "taste.project_and_usage_contexts_are_independent_axes",
+      "status": "passed"
+    },
+    {
+      "type": "atomic.taste_loop_runs_on_more_than_one_editable_subject",
+      "status": "passed"
+    }
+  ]
+}

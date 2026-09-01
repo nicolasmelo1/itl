@@ -473,7 +473,7 @@ turns "add 20,000 components" into a data problem.
 
 | Sub-phase | Work | Gate |
 | --- | --- | --- |
-| 07A | Corpus integrity first: one unambiguous database path, real session IDs from the client, legacy rows marked. Then the shared dimension space, capability manifests, value-scale projection, `ProjectContext` × `UsageContext`, and evidence recorded at dimension altitude. Includes the already-delivered generic subject registry, scoped retrieval and `TasteBrief` v3. | `taste.dimensions_are_shared_and_component_declared` |
+| 07A — **delivered** | Corpus integrity first: one unambiguous database path, real session IDs from the client, legacy rows marked. Then the shared dimension space, capability manifests, value-scale projection, `ProjectContext` × `UsageContext`, and evidence recorded at dimension altitude. Includes the already-delivered generic subject registry, scoped retrieval and `TasteBrief` v3. | `pnpm verify:multi-component-taste` |
 | 07B | Declarative component definitions and their code generation, then the full catalog in four dependency-ordered waves (17 atoms → 26 molecules → 14 organisms → 6 compositions), each with renderer, manifest, states, generated stories and a11y checks. Real `ui.storybook_matches_catalog` assertion. | `taste.stimulus_catalog_covers_the_dimension_space` |
 | 07C | Taste bench: single-stimulus screen, pairwise same-context and cross-context contrast, keyboard flow, session summary. DSPy live or removed. | `taste.bench_acquires_pairwise_and_contextual_signal` |
 | 07D | `.taste` export/import, MCP reader, evaluation harness with the four splits and five baselines. | `taste.portable_artifact_round_trips_and_is_evaluated` |
@@ -519,10 +519,10 @@ Recorded so they are not re-litigated:
 
 ## Acceptance criteria
 
-- [ ] The preference store resolves to one path regardless of working directory, and every recorded judgment carries a real session ID. (proof: deferred: `taste.dimensions_are_shared_and_component_declared`)
-- [ ] Every registered component declares its taste capabilities, and one judgment records evidence on shared dimensions plus a component residual. (proof: deferred: `taste.dimensions_are_shared_and_component_declared`)
-- [ ] A preference recorded on one component changes retrieval for a different component that shares the dimension, and does not change dimensions it does not share. (proof: deferred: `taste.dimensions_are_shared_and_component_declared`)
-- [ ] `ProjectContext` and `UsageContext` are independent axes, and the same usage under two product tones is a compatible relation rather than a contradiction. (proof: deferred: `taste.dimensions_are_shared_and_component_declared`)
+- [x] The preference store resolves to one path regardless of working directory, and every recorded judgment carries a real session ID. (proof: assertion:taste.corpus_resolves_to_one_path_with_real_session_ids)
+- [x] Every registered component declares its taste capabilities, and one judgment records evidence on shared dimensions plus a component residual. (proof: assertion:taste.dimensions_are_shared_and_component_declared)
+- [x] A preference recorded on one component changes retrieval for a different component that shares the dimension, and does not change dimensions it does not share. (proof: assertion:taste.shared_dimension_evidence_transfers_without_leaking)
+- [x] `ProjectContext` and `UsageContext` are independent axes, and the same usage under two product tones is a compatible relation rather than a contradiction. (proof: assertion:taste.project_and_usage_contexts_are_independent_axes)
 - [ ] Every component in the target inventory is registered with a schema, a renderer, a capability manifest and documented states, and its schema is generated from one declaration rather than written twice. (proof: deferred: `taste.stimulus_catalog_covers_the_dimension_space`)
 - [ ] Every declared dimension is exposed by at least three components across two Atomic levels, and the five held-out components never appear in a training judgment. (proof: deferred: `taste.stimulus_catalog_covers_the_dimension_space`)
 - [ ] Storybook renders every registered component's states and dimension sweeps from the catalog, and the assertion fails when stories and catalog diverge. (proof: deferred: `taste.stimulus_catalog_covers_the_dimension_space`)
@@ -530,7 +530,7 @@ Recorded so they are not re-litigated:
 - [ ] The DSPy signature path is exercised by the live provider and carries no private event fields — or the adapter and its dependency are removed. (proof: deferred: `taste.bench_acquires_pairwise_and_contextual_signal`)
 - [ ] A `.taste` file round-trips: export, import into a clean store, and reproduce the same retrieval result for the same query. (proof: deferred: `taste.portable_artifact_round_trips_and_is_evaluated`)
 - [ ] The harness reports baselines A–E over temporal, leave-context-out, cross-component and held-out-component splits, and the held-out-component result is reported separately. (proof: deferred: `taste.portable_artifact_round_trips_and_is_evaluated`)
-- [ ] The multi-subject loop and its scoped, non-propagating retrieval remain green. (proof: assertion:atomic.taste_loop_runs_on_more_than_one_editable_subject)
+- [x] The multi-subject loop and its scoped, non-propagating retrieval remain green. (proof: assertion:atomic.taste_loop_runs_on_more_than_one_editable_subject)
 
 ## Out of scope
 

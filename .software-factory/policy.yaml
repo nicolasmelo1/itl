@@ -46,6 +46,11 @@ gates:
     evidence: "evidence/gates/atomic-design-system.json"
     plan: "plans/06-atomic-composition-loop.md"
     required_assertions: ["atomic.foundations_are_canonical_and_projected", "atomic.catalog_slice_has_valid_hierarchy_and_safe_slots", "atomic.sessions_preserve_level_scope_context_and_outcome", "atomic.taste_brief_is_minimized_versioned_auditable_and_provider_bounded", "atomic.taste_loop_runs_on_more_than_one_editable_subject", "atomic.settings_page_uses_registered_compositions", "atomic.settings_slice_has_basic_responsive_and_keyboard_proof"]
+  multi-component-taste:
+    activation: ["contracts/catalog/taste-dimensions.v1.json", "apps/ai/src/itl_ai/config/**", "apps/ai/src/itl_ai/memory/**", "apps/ai/src/itl_ai/refine/**", "apps/ai/src/itl_ai/main.py", "apps/web/src/features/refine/**", "apps/web/src/features/canvas/**", "packages/ui-catalog/src/**", "scripts/verify-multi-component-taste.mjs"]
+    evidence: "evidence/gates/multi-component-taste.json"
+    plan: "plans/07-multi-component-taste.md"
+    required_assertions: ["taste.corpus_resolves_to_one_path_with_real_session_ids", "taste.dimensions_are_shared_and_component_declared", "taste.shared_dimension_evidence_transfers_without_leaking", "taste.project_and_usage_contexts_are_independent_axes", "atomic.taste_loop_runs_on_more_than_one_editable_subject"]
 
 rules:
   # L2 — The guardrail's own configuration is hash-locked

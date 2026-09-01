@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from os import getenv
 from pathlib import Path
 
+from itl_ai.config.paths import resolve_application_path
+
 
 @dataclass(frozen=True)
 class Settings:
@@ -33,5 +35,7 @@ def load_settings() -> Settings:
         openai_api_key=getenv("OPENAI_API_KEY"),
         openai_model=getenv("OPENAI_MODEL", "gpt-4.1-mini"),
         model_timeout_seconds=max(1, float(getenv("LLM_TIMEOUT_SECONDS", "120"))),
-        preference_database_path=Path(getenv("PREFERENCE_DATABASE_PATH", "data/preferences.db")),
+        # Anchored to the service, so `pnpm dev:ai` and a script run from the
+        # repository root read and write one corpus rather than forking it.
+        preference_database_path=resolve_application_path(getenv("PREFERENCE_DATABASE_PATH", "data/preferences.db")),
     )

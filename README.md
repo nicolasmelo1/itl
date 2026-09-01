@@ -4,7 +4,7 @@ ITL is a local laboratory for learning a person's UI taste through a constrained
 
 The browser renders a finite, schema-validated JSON UI spec. A person selects an editable component in a toolbar, hero, or form, writes a critique, reviews the interpreted visual directives, then asks the API for constrained alternatives. Explicit actions are recorded as append-only SQLite events with typed role, surface, density, evidence, directives, and a spec diff.
 
-The application is deliberately narrow at this stage: two registered editable subjects, controlled JSON UI specs (never screenshots), deterministic validation, and no global "beauty" score or vector database. Each subject's evidence is retrieved separately: an atom decision never becomes a molecule rule by accident. The complete target architecture is documented in [the Atomic Design system](docs/atomic-design-system.md) and its [versioned catalog contract](contracts/catalog/atomic-design.v1.json). Delivery happens in 20–40 minute loops, but the system's target includes every layer through concrete pages.
+The application is deliberately narrow at this stage: two registered editable subjects, controlled JSON UI specs (never screenshots), deterministic validation, and no global "beauty" score or vector database. Each subject's evidence is retrieved separately: an atom decision never becomes a molecule rule by accident. Judgments are *also* recorded in a shared, versioned taste dimension space, so a preference expressed on one component is readable on another that declares the same dimension — and on nothing else. The complete target architecture is documented in [the Atomic Design system](docs/atomic-design-system.md) and its [versioned catalog contract](contracts/catalog/atomic-design.v1.json). Delivery happens in 20–40 minute loops, but the system's target includes every layer through concrete pages.
 
 ## Quickstart
 
@@ -27,7 +27,9 @@ pnpm dev:ai
 ```
 
 The default is deterministic mode: no key, no network, and the local event log
-is written to `data/preferences.db` (gitignored). Confirm the API is live:
+is written to `apps/ai/data/preferences.db` (gitignored). A relative
+`PREFERENCE_DATABASE_PATH` is anchored to the service, so the same corpus is
+read and written whatever directory you start from. Confirm the API is live:
 
 ```sh
 curl http://127.0.0.1:8000/health
@@ -60,8 +62,9 @@ subject spec → critique → review → model candidate patches → determinist
 ```
 
 - The editable vocabulary is finite, visual only, and per subject: a Button has `recipe`, `size`, `radius`, `density` and `fontWeight`; a FormField has `labelPlacement`, `gap` and `hintTone`. The model chooses combinations from the selected subject's catalog, but cannot provide CSS, colors, content, semantic state, or unregistered components. Every patch is checked for schema, catalog values, directives, locks, untouched content/state, and duplicate candidates before rendering.
-- A raw event is never overwritten. Direct edits have stronger evidence than an inferred critique.
-- Context is retained as role, surface, and density. Retrieval independently reports exact/compatible/global/mismatch context and supporting/conflicting/unknown preference relations.
+- A raw event is never overwritten. Direct edits have stronger evidence than an inferred critique. Every judgment carries a real session ID; the API refuses a placeholder, because session hold-out is only as good as the identifier.
+- Taste lives in a shared, versioned dimension space (`shape`, `density`, `emphasis`, `typography`, `surface`, `motion`, `composition`). Each component declares a capability manifest saying which dimensions it exposes, through which of its props, and where each finite value lands on the shared scale. One judgment produces evidence on those shared dimensions plus a component-scoped residual, and a dimension with conflicting evidence is reported as conflicting.
+- Context is two independent axes. `UsageContext` is surface, semantic role, density and state; `ProjectContext` is product kind, visual tone, audience and platform, and belongs to the session rather than the artifact. Retrieval reports each axis separately, so the same usage under two product tones is a compatible relation rather than a contradiction. Preference relations remain supporting/conflicting/unknown.
 
 ## Optional model providers
 
@@ -111,7 +114,11 @@ pnpm verify:controlled-ui-language
 pnpm verify:memory-exploration-validation
 pnpm verify:button-contextual-lab
 pnpm verify:atomic-foundations
-# Completion gate for Plans 06 and 07; it proves the registered slice and the multi-subject loop,
+# Completion gate for Plan 06; it proves the registered slice and the multi-subject loop,
 # not the full catalog inventory.
 pnpm verify:atomic-design-system
+# Completion gate for Plan 07A; it proves one corpus path with real session IDs, the shared
+# dimension space and its capability manifests, dimension-altitude transfer without leakage,
+# and the two independent context axes. Sub-phases 07B–07D are still open.
+pnpm verify:multi-component-taste
 ```

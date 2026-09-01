@@ -106,6 +106,7 @@ def test_taste_brief_preserves_every_human_outcome_and_shown_candidate(tmp_path:
     for action, _, radius, candidate_id in reactions:
         refine.record_preference_event(
             PreferenceEventRequest(
+                sessionId="taste-brief-session",
                 componentType="Button",
                 scope=scope,
                 context=context(),
@@ -133,6 +134,7 @@ def test_remote_provider_payload_contains_only_the_taste_brief_memory_boundary(m
     scope = AtomicScope(level="atom", id="settings-save-button", semanticRole="primary-action")
     refine.record_preference_event(
         PreferenceEventRequest(
+            sessionId="taste-brief-session",
             componentType="Button",
             scope=scope,
             context=context(),
@@ -164,6 +166,7 @@ def test_remote_provider_payload_contains_only_the_taste_brief_memory_boundary(m
     provider.generate_candidate_patches(
         component_type="Button",
         request=GenerateVariantsRequest(
+            sessionId="taste-brief-session",
             specVersion="itl.ui/v1",
             spec=button_spec(),
             targetElementId="continue-button",

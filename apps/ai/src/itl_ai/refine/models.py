@@ -4,16 +4,37 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Annotated, Literal, get_args
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import AfterValidator, BaseModel, Field, StringConstraints, model_validator
+
+from itl_ai.refine.base import ContextRelation, EvidenceStrength, StrictModel, TasteOutcome
+from itl_ai.refine.dimensions import (
+    DIMENSION_SPACE_VERSION,
+    DimensionCapability,
+    TasteDimension,
+    capabilities_for,
+    validate_capability_manifests,
+)
 
 UI_SPEC_VERSION = "itl.ui/v1"
 # A visual path is `/appearance/<token>`. Which tokens exist is a property of
 # the selected component, not of this type: see COMPONENT_REGISTRY below.
 VisualPath = Annotated[str, StringConstraints(pattern=r"^/appearance/[a-z][a-zA-Z0-9]*$")]
+# `local` was the hardcoded client value for the first 95 judgments, which made
+# session hold-out impossible. A placeholder is now refused at the boundary.
+RESERVED_SESSION_IDS = frozenset({"local", "default", "session", "anonymous", "unknown"})
 
 
-class StrictModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+def _reject_reserved_session_id(value: str) -> str:
+    if value.lower() in RESERVED_SESSION_IDS:
+        raise ValueError("A judgment must carry a real session ID, not a placeholder.")
+    return value
+
+
+SessionId = Annotated[
+    str,
+    StringConstraints(pattern=r"^[a-zA-Z0-9][a-zA-Z0-9_-]{7,79}$"),
+    AfterValidator(_reject_reserved_session_id),
+]
 
 
 class ButtonContent(StrictModel):
@@ -96,10 +117,50 @@ class ErrorResponse(StrictModel):
     recoverable: bool = True
 
 
+ProductKind = Literal["saas", "marketing", "commerce", "internal-tool", "editorial", "developer-tool"]
+VisualTone = Literal["serious", "playful", "minimal", "expressive", "dense", "calm"]
+Platform = Literal["web", "desktop", "mobile"]
+Surface = Literal["toolbar", "hero", "form", "dashboard"]
+SemanticRole = Literal["primary-action", "secondary-action"]
+Density = Literal["compact", "comfortable"]
+UsageState = Literal["default", "disabled", "loading"]
+CorpusStratum = Literal["primary", "legacy"]
+
+
+class ProjectContext(StrictModel):
+    """A property of the project or session, never of the artifact.
+
+    Round buttons in a playful product and square ones in a serious one are the
+    same usage under two product tones. Without this axis they read as one
+    context, and therefore as a contradiction the model cannot explain.
+    """
+
+    productKind: ProductKind
+    visualTone: list[VisualTone] = Field(min_length=1, max_length=4)
+    audience: str | None = Field(default=None, min_length=1, max_length=120)
+    platform: Platform = "web"
+    brandProfile: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]{0,60}$")
+
+
+class UsageContext(StrictModel):
+    """Where in a screen the stimulus sits. Independent of the product tone."""
+
+    surface: Surface
+    semanticRole: SemanticRole
+    density: Density
+    state: UsageState = "default"
+
+
 class DesignContext(StrictModel):
-    role: Literal["primary-action", "secondary-action"]
-    surface: Literal["toolbar", "hero", "form", "dashboard"]
-    density: Literal["compact", "comfortable"]
+    """The usage axis as the refinement clients still spell it on the wire."""
+
+    role: SemanticRole
+    surface: Surface
+    density: Density
+    state: UsageState = "default"
+
+    def usage(self) -> UsageContext:
+        return UsageContext(surface=self.surface, semanticRole=self.role, density=self.density, state=self.state)
 
 
 AtomicDesignLevel = Literal["foundation", "atom", "molecule", "organism", "template", "page"]
@@ -200,7 +261,6 @@ def level_for_component(component_type: str) -> AtomicDesignLevel:
     return EDITABLE_COMPONENTS[component_type].level
 
 
-TasteOutcome = Literal["accepted", "almost", "rejected", "indifferent", "manual_edit"]
 DEFAULT_EVENT_OUTCOMES: dict[str, TasteOutcome] = {
     "candidate_acceptance": "accepted",
     "almost": "almost",
@@ -219,7 +279,7 @@ class PreferenceEvidence(StrictModel):
     likedPaths: list[VisualPath] = []
     dislikedPaths: list[VisualPath] = []
     lockedPaths: list[VisualPath] = []
-    strength: Literal["weak", "moderate", "strong"] = "moderate"
+    strength: EvidenceStrength = "moderate"
 
 
 class KeepDirective(StrictModel):
@@ -282,8 +342,9 @@ class Interpretation(StrictModel):
 class GenerateSpecRequest(StrictModel):
     target: EditableComponentType = "Button"
     prompt: str = Field(default="A primary action", min_length=1, max_length=4_000)
-    sessionId: str = Field(default="local", pattern=r"^[a-zA-Z0-9_-]{1,80}$")
+    sessionId: SessionId
     context: DesignContext
+    projectContext: ProjectContext | None = None
     # Keep the Button default for the existing local laboratory, but never
     # replace an explicitly supplied atomic subject during retrieval.
     scope: AtomicScope = Field(default_factory=lambda: DEFAULT_BUTTON_SCOPE.model_copy(deep=True))
@@ -312,8 +373,9 @@ class GenerateVariantsRequest(StrictModel):
     targetElementId: str = Field(pattern=r"^[a-z][a-z0-9-]*$")
     interpretation: Interpretation
     includeWild: bool = False
-    sessionId: str = Field(default="local", pattern=r"^[a-zA-Z0-9_-]{1,80}$")
+    sessionId: SessionId
     context: DesignContext
+    projectContext: ProjectContext | None = None
     scope: AtomicScope = Field(default_factory=lambda: DEFAULT_BUTTON_SCOPE.model_copy(deep=True))
 
 
@@ -360,10 +422,13 @@ class SpecDiff(StrictModel):
 class PreferenceEventRequest(StrictModel):
     """An explicit, append-only action from the refinement UI."""
 
-    sessionId: str = Field(default="local", pattern=r"^[a-zA-Z0-9_-]{1,80}$")
+    sessionId: SessionId
     componentType: EditableComponentType = "Button"
     scope: AtomicScope = Field(default_factory=lambda: DEFAULT_BUTTON_SCOPE.model_copy(deep=True))
     context: DesignContext
+    # The product tone belongs to the project or session, not to the artifact.
+    # A judgment without one is read as `unspecified` and ranks below one with.
+    projectContext: ProjectContext | None = None
     targetElementId: str = Field(pattern=r"^[a-z][a-z0-9-]*$")
     action: Literal[
         "manual_edit",
@@ -422,13 +487,31 @@ class ObservedAppearance(StrictModel):
     appearance: dict[str, str]
 
 
+class ContextRelations(StrictModel):
+    """Usage and product tone are compared independently, then summarized.
+
+    Same usage under two product tones is `compatible`, not a contradiction:
+    the system has an axis on which the two rows legitimately differ.
+    """
+
+    usage: ContextRelation
+    project: ContextRelation
+    overall: ContextRelation
+
+
 class RetrievedEvidence(StrictModel):
     id: int
-    contextRelation: Literal["exact", "compatible", "global", "mismatch"]
+    contextRelation: ContextRelation
+    relations: ContextRelations
+    # Rows recorded before the acquisition contract required a real session ID,
+    # a scope, an outcome and a project context are reported, never rewritten,
+    # and never silently pooled with rows that carry all four.
+    stratum: CorpusStratum
     preferenceRelation: Literal["supporting", "conflicting", "unknown"]
     source: str
     scope: AtomicScope | None = None
     context: DesignContext | None = None
+    projectContext: ProjectContext | None = None
     evidence: PreferenceEvidence
     critique: str | None = None
     # This is a retrieval projection, not a second memory store.  It makes the
@@ -454,7 +537,7 @@ class TasteBriefDecision(StrictModel):
 
     eventId: int
     scope: AtomicScope | None = None
-    contextRelation: Literal["exact", "compatible", "global", "mismatch"]
+    contextRelation: ContextRelation
     preferenceRelation: Literal["supporting", "conflicting", "unknown"]
     outcome: TasteOutcome
     # A row whose snapshot no longer holds a readable subject carries no
@@ -462,7 +545,7 @@ class TasteBriefDecision(StrictModel):
     # a real one in the prompt.
     stimulus: TasteStimulus | None = None
     source: str
-    strength: Literal["weak", "moderate", "strong"]
+    strength: EvidenceStrength
     directives: list[AttributeDirective] = []
 
 
@@ -474,8 +557,69 @@ class TasteBrief(StrictModel):
     decisions: list[TasteBriefDecision]
 
 
+class DimensionSource(StrictModel):
+    """Which components contributed to a shared reading, and through which events."""
+
+    componentType: str
+    eventIds: list[int]
+
+
+class ComponentResidual(StrictModel):
+    """An exception that does not generalize, kept as a statement of its own.
+
+    "Angular everywhere, but pill is fine on chips" is a real taste statement.
+    It is not an error term and must survive into the artifact.
+    """
+
+    componentType: str
+    dimension: TasteDimension
+    componentCoordinate: float
+    sharedCoordinate: float
+    delta: float
+    isException: bool
+    eventIds: list[int]
+
+
+class DimensionEvidence(StrictModel):
+    """One shared dimension, read through the queried component's own tokens."""
+
+    dimension: TasteDimension
+    token: str
+    coordinate: float | None
+    nearestValue: str | None
+    support: int
+    agreement: Literal["consistent", "contradictory", "unknown"]
+    # A compiled preference that cannot name its evidence does not ship.
+    eventIds: list[int]
+    sources: list[DimensionSource]
+    residual: ComponentResidual | None = None
+
+
+class ComponentCapability(StrictModel):
+    dimension: TasteDimension
+    token: str
+    path: str
+    values: dict[str, float]
+
+
+class ComponentManifest(StrictModel):
+    """What part of the shared taste space this stimulus can express."""
+
+    componentType: str
+    level: AtomicDesignLevel
+    dimensionSpaceVersion: Literal["itl.taste-dimensions/v1"] = DIMENSION_SPACE_VERSION
+    capabilities: list[ComponentCapability]
+
+
+class ManifestResponse(StrictModel):
+    dimensionSpaceVersion: Literal["itl.taste-dimensions/v1"] = DIMENSION_SPACE_VERSION
+    dimensions: list[TasteDimension]
+    components: list[ComponentManifest]
+
+
 class MemoryQuery(StrictModel):
     context: DesignContext
+    projectContext: ProjectContext | None = None
     evidence: PreferenceEvidence = PreferenceEvidence()
     componentType: EditableComponentType = "Button"
     scope: AtomicScope = Field(default_factory=lambda: DEFAULT_BUTTON_SCOPE.model_copy(deep=True))
@@ -483,3 +627,31 @@ class MemoryQuery(StrictModel):
 
 class MemoryResponse(StrictModel):
     evidence: list[RetrievedEvidence]
+    dimensionSpaceVersion: Literal["itl.taste-dimensions/v1"] = DIMENSION_SPACE_VERSION
+    # Evidence at the shared altitude. Event retrieval stays partitioned by
+    # subject; this is the only channel on which a judgment about one component
+    # is legible to another, and only where they declare the same dimension.
+    dimensions: list[DimensionEvidence] = []
+
+
+def _capability_model(capability: DimensionCapability) -> ComponentCapability:
+    return ComponentCapability(
+        dimension=capability.dimension,
+        token=capability.token,
+        path=capability.path,
+        values=dict(capability.projection),
+    )
+
+
+def manifest_for_component(component_type: str) -> ComponentManifest:
+    return ComponentManifest(
+        componentType=component_type,
+        level=EDITABLE_COMPONENTS[component_type].level,
+        capabilities=[_capability_model(capability) for capability in capabilities_for(component_type)],
+    )
+
+
+validate_capability_manifests(
+    {name: entry.vocabulary for name, entry in EDITABLE_COMPONENTS.items()},
+    {name: entry.orderedTokens for name, entry in EDITABLE_COMPONENTS.items()},
+)
