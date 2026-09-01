@@ -59,6 +59,16 @@ LEGACY_STRATUM_PENALTY = 40
 STRENGTH_WEIGHT = {"weak": 0.5, "moderate": 1.0, "strong": 1.5}
 USAGE_WEIGHT: dict[ContextRelation, float] = {"exact": 1.0, "compatible": 0.6, "global": 0.3, "mismatch": 0.15}
 PROJECT_WEIGHT: dict[ContextRelation, float] = {"exact": 1.0, "compatible": 0.8, "global": 0.5, "mismatch": 0.2}
+DIMENSION_OBSERVATION_QUERY = """
+    SELECT dimension_observations.event_id, dimension_observations.dimension,
+           dimension_observations.component_type, dimension_observations.value,
+           dimension_observations.coordinate, dimension_observations.polarity,
+           dimension_observations.strength, preference_events.context_json,
+           preference_events.project_context_json
+    FROM dimension_observations
+    JOIN preference_events ON preference_events.id = dimension_observations.event_id
+    WHERE dimension_observations.dimension = ?
+"""
 DIRECTIVES_ADAPTER = TypeAdapter(list[AttributeDirective])
 VISUAL_PATH_PATTERN = re.compile(r"^/appearance/[a-z][a-zA-Z0-9]*$")
 OUTCOMES = DEFAULT_EVENT_OUTCOMES
@@ -329,24 +339,10 @@ class PreferenceRepository:
         declares, so evidence transfers along a shared dimension and nowhere
         else.
         """
-        exposed = sorted(dimensions_for(component_type))
-        if not exposed:
-            return []
-        placeholders = ",".join("?" for _ in exposed)
+        rows: list[sqlite3.Row] = []
         with self._connection() as connection:
-            rows = connection.execute(
-                f"""
-                SELECT dimension_observations.event_id, dimension_observations.dimension,
-                       dimension_observations.component_type, dimension_observations.value,
-                       dimension_observations.coordinate, dimension_observations.polarity,
-                       dimension_observations.strength, preference_events.context_json,
-                       preference_events.project_context_json
-                FROM dimension_observations
-                JOIN preference_events ON preference_events.id = dimension_observations.event_id
-                WHERE dimension_observations.dimension IN ({placeholders})
-                """,
-                exposed,
-            ).fetchall()
+            for dimension in sorted(dimensions_for(component_type)):
+                rows.extend(connection.execute(DIMENSION_OBSERVATION_QUERY, (dimension,)).fetchall())
         return compile_dimension_evidence(component_type, _weighted_observations(rows, context, project_context))
 
     def record_generation(

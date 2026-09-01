@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "gate": "multi-component-taste",
-  "implementation_sha256": "ea51bac8af4c2438131371e1113233d01aeed840a6596ae786e85d1bc709af9e",
+  "implementation_sha256": "64da9207237a4b2e96bce6019d7254200a1b2e5102e513e34096f034c8adb2b6",
   "runs": [
     {
       "scenario": "multi-component-taste",

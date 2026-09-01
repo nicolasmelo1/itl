@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "gate": "atomic-design-system",
-  "implementation_sha256": "645795fc5a7433bade5eb215a584085e75660ad5fb39202e05bfb3262f428608",
+  "implementation_sha256": "fd9b9748938e840fe45d1ff22a18bd00d12dc50111741a2e2e73314cba77166c",
   "runs": [
     {
       "scenario": "atomic-design-system",
