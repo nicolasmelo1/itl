@@ -15,6 +15,19 @@ export type DesignContext = {
   role: "primary-action" | "secondary-action";
   surface: "toolbar" | "hero" | "form" | "dashboard";
   density: "compact" | "comfortable";
+  state?: "default" | "disabled" | "loading";
+};
+/**
+ * The product tone a session is judging under. It belongs to the project, not
+ * to the artifact: the same usage under two tones is a compatible relation
+ * rather than the person contradicting themselves.
+ */
+export type ProjectContext = {
+  productKind: "saas" | "marketing" | "commerce" | "internal-tool" | "editorial" | "developer-tool";
+  visualTone: Array<"serious" | "playful" | "minimal" | "expressive" | "dense" | "calm">;
+  audience?: string;
+  platform: "web" | "desktop" | "mobile";
+  brandProfile?: string;
 };
 export type AtomicScope = {
   level: "atom" | "molecule" | "organism" | "template" | "page";

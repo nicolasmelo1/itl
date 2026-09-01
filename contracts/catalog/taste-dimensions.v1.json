@@ -1,0 +1,51 @@
+{
+  "version": "itl.taste-dimensions/v1",
+  "description": "The shared space taste lives in. A component is a stimulus that exposes part of this space, never a private vocabulary. The dimension list may grow; it may not grow per component.",
+  "dimensions": {
+    "shape": ["radius", "borderWeight", "geometry"],
+    "density": ["spacing", "padding", "controlHeight", "informationDensity"],
+    "emphasis": ["contrast", "elevation", "weight", "saturation"],
+    "typography": ["scale", "weight", "tracking", "hierarchy"],
+    "surface": ["fill", "border", "elevation", "transparency"],
+    "motion": ["speed", "amplitude", "easing"],
+    "composition": ["alignment", "whitespace", "grouping", "hierarchy"]
+  },
+  "components": {
+    "Button": {
+      "shape.radius": {
+        "token": "radius",
+        "values": { "square": 0.0, "soft": 0.5, "pill": 1.0 }
+      },
+      "density.controlHeight": {
+        "token": "size",
+        "values": { "compact": 0.0, "regular": 1.0 }
+      },
+      "density.padding": {
+        "token": "density",
+        "values": { "compact": 0.0, "comfortable": 1.0 }
+      },
+      "emphasis.weight": {
+        "token": "fontWeight",
+        "values": { "regular": 0.0, "semibold": 1.0 }
+      },
+      "emphasis.contrast": {
+        "token": "recipe",
+        "values": { "ghost": 0.0, "outline": 0.33, "secondary": 0.66, "primary": 1.0 }
+      }
+    },
+    "FormField": {
+      "composition.alignment": {
+        "token": "labelPlacement",
+        "values": { "above": 0.0, "inline": 1.0 }
+      },
+      "density.spacing": {
+        "token": "gap",
+        "values": { "tight": 0.0, "regular": 0.5, "loose": 1.0 }
+      },
+      "emphasis.contrast": {
+        "token": "hintTone",
+        "values": { "quiet": 0.0, "strong": 1.0 }
+      }
+    }
+  }
+}

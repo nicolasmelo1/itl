@@ -9,6 +9,8 @@ export function hasLocale(value: string): value is Locale {
 export type Messages = {
   context: string;
   surfaces: Record<"toolbar" | "hero" | "form", string>;
+  projectTone: string;
+  projectTones: Record<"serious" | "playful", string>;
   preview: string;
   previewHint: string;
   subjectSurface: (surface: string) => string;
@@ -68,6 +70,8 @@ export const messages: Record<Locale, Messages> = {
   en: {
     context: "Session context",
     surfaces: { toolbar: "toolbar", hero: "hero", form: "form" },
+    projectTone: "Product tone",
+    projectTones: { serious: "serious", playful: "playful" },
     preview: "Preview",
     previewHint: "Select the Button in this live UI to refine it.",
     subjectSurface: (surface) => `${surface} design surface`,
@@ -125,6 +129,8 @@ export const messages: Record<Locale, Messages> = {
   "pt-BR": {
     context: "Contexto da sessão",
     surfaces: { toolbar: "barra de ferramentas", hero: "destaque", form: "formulário" },
+    projectTone: "Tom do produto",
+    projectTones: { serious: "sério", playful: "descontraído" },
     preview: "Pré-visualização",
     previewHint: "Selecione o botão nesta interface para refiná-lo.",
     subjectSurface: (surface) => `Área de design: ${surface}`,

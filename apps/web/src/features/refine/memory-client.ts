@@ -6,7 +6,9 @@ import type {
   DesignContext,
   Interpretation,
   PreferenceEvidence,
+  ProjectContext,
 } from "./refine-engine";
+import { currentSessionId } from "./session";
 
 type MemoryAction =
   | "manual_edit"
@@ -46,6 +48,7 @@ export async function recordPreferenceEvent(input: {
   componentType: "Button" | "FormField";
   scope: AtomicScope;
   context: DesignContext;
+  projectContext?: ProjectContext;
   evidence?: PreferenceEvidence;
   directives?: AttributeDirective[];
   selectedElementId?: string;
@@ -62,7 +65,7 @@ export async function recordPreferenceEvent(input: {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          sessionId: "local",
+          sessionId: currentSessionId(),
           ...event,
           evidence: input.evidence ?? interpretation?.evidence ?? emptyEvidence(input.action),
           directives: input.directives ?? interpretation?.directives ?? [],
@@ -79,6 +82,7 @@ export async function recordPreferenceEvent(input: {
 
 export async function retrievePreferenceMemory(input: {
   context: DesignContext;
+  projectContext?: ProjectContext;
   componentType: "Button" | "FormField";
   scope: AtomicScope;
   evidence?: PreferenceEvidence;
@@ -92,6 +96,7 @@ export async function retrievePreferenceMemory(input: {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           context: input.context,
+          projectContext: input.projectContext,
           componentType: input.componentType,
           scope: input.scope,
           evidence: input.evidence ?? emptyEvidence("indifference"),

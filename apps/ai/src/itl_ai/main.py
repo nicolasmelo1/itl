@@ -9,20 +9,24 @@ from pydantic import BaseModel, Field
 from itl_ai.config.settings import load_settings
 from itl_ai.memory.repository import PreferenceRepository
 from itl_ai.refine.catalog import RefineValidationError
+from itl_ai.refine.dimensions import ORDERED_TASTE_DIMENSIONS
 from itl_ai.refine.models import (
-    ErrorResponse as RefineErrorResponse,
-)
-from itl_ai.refine.models import (
+    EDITABLE_COMPONENTS,
     GenerateSpecRequest,
     GenerateSpecResponse,
     GenerateVariantsRequest,
     GenerateVariantsResponse,
+    ManifestResponse,
     MemoryQuery,
     MemoryResponse,
     ParseCritiqueRequest,
     ParseCritiqueResponse,
     PreferenceEventRequest,
     PreferenceEventResponse,
+    manifest_for_component,
+)
+from itl_ai.refine.models import (
+    ErrorResponse as RefineErrorResponse,
 )
 from itl_ai.refine.providers import ProviderUnavailableError, configured_provider
 from itl_ai.refine.service import RefineService
@@ -31,7 +35,7 @@ app = FastAPI(title="ITL AI API", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
-    allow_methods=["POST"],
+    allow_methods=["GET", "POST"],
     allow_headers=["Content-Type"],
 )
 
@@ -169,7 +173,18 @@ def record_preference_event(request: PreferenceEventRequest) -> PreferenceEventR
 @app.post("/v1/preference-memory", response_model=MemoryResponse)
 def preference_memory(query: MemoryQuery) -> MemoryResponse:
     """Return bounded, contextual evidence for one subject's generator and memory UI."""
-    return refine_service.preference_memory(query.context, query.evidence, query.scope, query.componentType)
+    return refine_service.preference_memory(
+        query.context, query.evidence, query.scope, query.componentType, query.projectContext
+    )
+
+
+@app.get("/v1/taste/dimensions", response_model=ManifestResponse)
+def taste_dimensions() -> ManifestResponse:
+    """Publish the shared dimension space and every subject's capability manifest."""
+    return ManifestResponse(
+        dimensions=sorted(ORDERED_TASTE_DIMENSIONS),
+        components=[manifest_for_component(name) for name in sorted(EDITABLE_COMPONENTS)],
+    )
 
 
 def run() -> None:

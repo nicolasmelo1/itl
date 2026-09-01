@@ -87,6 +87,7 @@ def test_button_directives_preserve_direction_and_recipes_are_coherent() -> None
         json={
             "specVersion": "itl.ui/v1",
             "spec": button_spec(),
+            "sessionId": "api-session-1",
             "targetElementId": "continue-button",
             "interpretation": interpretation(),
             "includeWild": True,
@@ -110,6 +111,7 @@ def test_button_taste_space_rejects_state_and_content_paths() -> None:
         json={
             "specVersion": "itl.ui/v1",
             "spec": button_spec(),
+            "sessionId": "api-session-1",
             "targetElementId": "continue-button",
             "interpretation": invalid,
             "context": context,
@@ -123,6 +125,7 @@ def test_candidate_acceptance_keeps_candidate_identity_separate_from_element_ide
     response = client.post(
         "/v1/preference-events",
         json={
+            "sessionId": "api-session-1",
             "context": context,
             "targetElementId": "continue-button",
             "selectedElementId": "continue-button",
@@ -167,6 +170,7 @@ def test_provider_timeout_returns_unavailable_for_candidates_but_keeps_parse_fal
         json={
             "specVersion": "itl.ui/v1",
             "spec": button_spec(),
+            "sessionId": "api-session-1",
             "targetElementId": "continue-button",
             "interpretation": interpretation(),
             "context": context,

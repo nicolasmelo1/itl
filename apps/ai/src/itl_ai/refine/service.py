@@ -33,6 +33,7 @@ from itl_ai.refine.models import (
     PreferenceEventRequest,
     PreferenceEventResponse,
     PreferenceEvidence,
+    ProjectContext,
     RetrievedEvidence,
     TasteBrief,
     TasteBriefDecision,
@@ -50,7 +51,9 @@ class RefineService:
 
     def generate_spec(self, request: GenerateSpecRequest) -> GenerateSpecResponse:
         scope = _scope_for_target(request.target, request.scope)
-        evidence = self.repository.retrieve(request.target, request.context, PreferenceEvidence(), scope)
+        evidence = self.repository.retrieve(
+            request.target, request.context, PreferenceEvidence(), scope, request.projectContext
+        )
         brief = _taste_brief(request.context, scope, evidence)
         spec = _decode_json(self.provider.generate_spec(request.prompt, request.target, brief))
         output_id = _output_id("spec")
@@ -74,7 +77,7 @@ class RefineService:
         component_type = assert_scope_matches_element(request.spec, request.targetElementId, request.scope)
         validate_interpretation(request.interpretation, request.targetElementId, component_type)
         evidence = self.repository.retrieve(
-            component_type, request.context, request.interpretation.evidence, request.scope
+            component_type, request.context, request.interpretation.evidence, request.scope, request.projectContext
         )
         brief = _taste_brief(request.context, request.scope, evidence)
         counts = self.repository.policy_counts(request.sessionId)
@@ -116,8 +119,18 @@ class RefineService:
         evidence: PreferenceEvidence,
         scope: AtomicScope = DEFAULT_BUTTON_SCOPE,
         component_type: str = "Button",
+        project_context: ProjectContext | None = None,
     ) -> MemoryResponse:
-        return MemoryResponse(evidence=self.repository.retrieve(component_type, context, evidence, scope))
+        """Return both altitudes: this subject's decisions, and the shared space.
+
+        Event retrieval stays partitioned by subject. The dimension list is the
+        only channel on which another component's judgment is legible here, and
+        it carries only the dimensions this component itself declares.
+        """
+        return MemoryResponse(
+            evidence=self.repository.retrieve(component_type, context, evidence, scope, project_context),
+            dimensions=self.repository.retrieve_dimensions(component_type, context, project_context),
+        )
 
     def taste_brief(
         self,

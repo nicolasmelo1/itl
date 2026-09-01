@@ -167,6 +167,7 @@ def test_relevance_ranks_a_high_confidence_rejection_without_changing_its_polari
     scope = AtomicScope(level="atom", id="hero-continue-button", semanticRole="primary-action")
     refine.record_preference_event(
         PreferenceEventRequest(
+            sessionId="evaluation",
             componentType="Button",
             scope=scope,
             context=context("hero"),
@@ -180,6 +181,7 @@ def test_relevance_ranks_a_high_confidence_rejection_without_changing_its_polari
     )
     rejected = refine.record_preference_event(
         PreferenceEventRequest(
+            sessionId="evaluation",
             componentType="Button",
             scope=scope,
             context=context("hero"),
@@ -211,6 +213,7 @@ def test_wild_policy_preserves_explicit_keeps(tmp_path: Path) -> None:
     )
     result = refine.generate_variants(
         GenerateVariantsRequest(
+            sessionId="evaluation",
             specVersion="itl.ui/v1",
             spec=button_spec(),
             targetElementId="continue-button",
@@ -252,6 +255,7 @@ def test_live_provider_candidates_are_used_when_they_are_valid_and_distinct(tmp_
             )
 
     request = GenerateVariantsRequest(
+        sessionId="evaluation",
         specVersion="itl.ui/v1",
         spec=button_spec(),
         targetElementId="continue-button",
@@ -308,6 +312,7 @@ def test_invalid_candidate_patches_are_repaired_once_before_rendering(tmp_path: 
 
     provider = RepairingProvider()
     request = GenerateVariantsRequest(
+        sessionId="evaluation",
         specVersion="itl.ui/v1",
         spec=button_spec(),
         targetElementId="continue-button",

@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "gate": "multi-component-taste",
+  "implementation_sha256": "ea51bac8af4c2438131371e1113233d01aeed840a6596ae786e85d1bc709af9e",
+  "runs": [
+    {
+      "scenario": "multi-component-taste",
+      "status": "passed",
+      "actor": "Claude",
+      "report": "evidence/reports/multi-component-taste.json",
+      "report_sha256": "f6a5c770dc8cb3d4ab69f759390393220da395d0e8ac3d8bc34df244c133192b",
+      "required_assertions": [
+        "taste.corpus_resolves_to_one_path_with_real_session_ids",
+        "taste.dimensions_are_shared_and_component_declared",
+        "taste.shared_dimension_evidence_transfers_without_leaking",
+        "taste.project_and_usage_contexts_are_independent_axes",
+        "atomic.taste_loop_runs_on_more_than_one_editable_subject"
+      ]
+    }
+  ]
+}

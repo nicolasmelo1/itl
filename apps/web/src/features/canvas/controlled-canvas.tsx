@@ -11,6 +11,7 @@ import {
   type AppearanceToken,
   type DesignContext,
   type Interpretation,
+  type ProjectContext,
   type RefineVariant,
   appearancePaths,
   appearanceValues,
@@ -35,6 +36,15 @@ const contexts: Record<"toolbar" | "hero" | "form", DesignContext> = {
   hero: { role: "primary-action", surface: "hero", density: "comfortable" },
   form: { role: "primary-action", surface: "form", density: "comfortable" },
 };
+/**
+ * The product this session is judging for. It is a separate axis from where a
+ * stimulus sits on the screen, so the same hero button judged under two tones
+ * is two readings rather than one contradiction.
+ */
+const projectContexts: Record<"serious" | "playful", ProjectContext> = {
+  serious: { productKind: "saas", visualTone: ["serious", "minimal"], platform: "web" },
+  playful: { productKind: "marketing", visualTone: ["playful", "expressive"], platform: "web" },
+};
 type ConcreteObservation = RetrievedObservation & {
   outcome: NonNullable<RetrievedObservation["outcome"]>;
   observedAppearance: NonNullable<RetrievedObservation["observedAppearance"]>;
@@ -44,6 +54,7 @@ export function ControlledCanvas({ locale }: { locale: Locale }) {
   const messages = localizedMessages[locale];
   const [currentSpec, setCurrentSpec] = useState(refineFixtureSpec);
   const [surface, setSurface] = useState<keyof typeof contexts>("hero");
+  const [productTone, setProductTone] = useState<keyof typeof projectContexts>("serious");
   const [selectedElementId, setSelectedElementId] = useState("continue-button");
   const [reaction, setReaction] = useState("1");
   const [critique, setCritique] = useState("");
@@ -56,6 +67,7 @@ export function ControlledCanvas({ locale }: { locale: Locale }) {
   const [round, setRound] = useState(1);
   const [observations, setObservations] = useState<RetrievedObservation[]>([]);
   const context = contexts[surface];
+  const projectContext = projectContexts[productTone];
 
   useEffect(() => markDevtoolsActive(), []);
 
@@ -122,6 +134,7 @@ export function ControlledCanvas({ locale }: { locale: Locale }) {
         interpretation,
         includeWild,
         context,
+        projectContext,
         scope,
       });
       setVariants(next);
@@ -167,11 +180,12 @@ export function ControlledCanvas({ locale }: { locale: Locale }) {
     const scope = scopeFor(currentSpec, input.targetElementId);
     const componentType = editableComponentType(currentSpec, input.targetElementId);
     if (!scope || !componentType) return;
-    void recordPreferenceEvent({ ...input, componentType, scope, context }).then((recorded) => {
+    void recordPreferenceEvent({ ...input, componentType, scope, context, projectContext }).then((recorded) => {
       if (!recorded) return;
       setMemoryEvents((count) => count + 1);
       void retrievePreferenceMemory({
         context,
+        projectContext,
         componentType,
         scope,
         evidence: input.evidence ?? input.interpretation?.evidence,
@@ -184,9 +198,24 @@ export function ControlledCanvas({ locale }: { locale: Locale }) {
     setVariants([]);
     const scope = scopeFor(currentSpec, selectedElementId);
     if (!scope || !selectedType) return;
-    void retrievePreferenceMemory({ context: contexts[nextSurface], componentType: selectedType, scope }).then(
-      setObservations,
-    );
+    void retrievePreferenceMemory({
+      context: contexts[nextSurface],
+      projectContext,
+      componentType: selectedType,
+      scope,
+    }).then(setObservations);
+  }
+
+  function selectProductTone(nextTone: keyof typeof projectContexts) {
+    setProductTone(nextTone);
+    const scope = scopeFor(currentSpec, selectedElementId);
+    if (!scope || !selectedType) return;
+    void retrievePreferenceMemory({
+      context,
+      projectContext: projectContexts[nextTone],
+      componentType: selectedType,
+      scope,
+    }).then(setObservations);
   }
 
   return (
@@ -206,6 +235,23 @@ export function ControlledCanvas({ locale }: { locale: Locale }) {
               type="button"
             >
               {messages.surfaces[name as keyof typeof contexts]}
+            </button>
+          ))}
+        </section>
+        <section
+          aria-label={messages.projectTone}
+          className={styles.contextPicker}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <span>{messages.projectTone}</span>
+          {Object.keys(projectContexts).map((name) => (
+            <button
+              aria-pressed={productTone === name}
+              key={name}
+              onClick={() => selectProductTone(name as keyof typeof projectContexts)}
+              type="button"
+            >
+              {messages.projectTones[name as keyof typeof projectContexts]}
             </button>
           ))}
         </section>
